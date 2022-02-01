@@ -1,5 +1,5 @@
 function [est_r_ea_e,est_v_ea_e,est_clock] = GNSS_LS_position_velocity(...
-    GNSS_measurements,no_GNSS_meas,predicted_r_ea_e,predicted_v_ea_e,bsvs,relsvs)
+    GNSS_measurements,no_GNSS_meas,predicted_r_ea_e,predicted_v_ea_e,bsvs,relsvs,settings)
 %GNSS_LS_position_velocity - Calculates position, velocity, clock offset, 
 %and clock drift using unweighted iterated least squares. Separate
 %calculations are implemented for position and clock offset and for
@@ -73,16 +73,14 @@ while (test_convergence>0.0001 && iter < 100) || iter<5
     if iter == 1
         tropo = zeros(no_GNSS_meas,1);
     else
-        zd = 2;
-        tropo = [];
         [~, EL, ~] = compute_azelrange(x_pred(1:3), GNSS_measurements(:,3:5)');
-        tropo = tropomodel(EL, zd);
+        tropo = tropomodel(EL, settings.zd);
     end
     
     % Unweighted least-squares solution, (9.35)/(9.141)
     x_est = x_pred + inv(H_matrix(1:no_GNSS_meas,:)' *...
         H_matrix(1:no_GNSS_meas,:)) * H_matrix(1:no_GNSS_meas,:)' *...
-        (GNSS_measurements(1:no_GNSS_meas,1) -  (pred_meas(1:no_GNSS_meas) - bsvs - relsvs + tropo ));
+        (GNSS_measurements(1:no_GNSS_meas,1) -  (pred_meas(1:no_GNSS_meas) + tropo ));
 
     % Test convergence    
     test_convergence = sqrt((x_est - x_pred)' * (x_est - x_pred));

@@ -107,4 +107,8 @@ TC_KF_config.clock_phase_PSD = 1;
 TC_KF_config.pseudo_range_SD = 2.5;
 % Pseudo-range rate measurement noise SD (m/s)
 TC_KF_config.range_rate_SD = 0.1;
+
+settings.zd = 0;
+settings.f1 = 1575.42e6;
+settings.f2 = 1227.6e6;
 end

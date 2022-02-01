@@ -45,11 +45,11 @@ sim = 1;
 if sim == 1
 [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,out_kf] =...
     Tightly_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
-    ,IMU_errors,GNSS_config,TC_KF_config,'sim');
+    ,IMU_errors,GNSS_config,TC_KF_config,'sim',imu,eph,WN,TOW,settings);
 else
 [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,out_kf] =...
     Tightly_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
-    ,IMU_errors,GNSS_config,TC_KF_config,'real',imu,eph,WN,TOW);
+    ,IMU_errors,GNSS_config,TC_KF_config,'real',imu,eph,WN,TOW,settings);
 end
 
 % Plot the input motion profile and the errors (may not work in Octave).
@@ -84,7 +84,7 @@ end
 
 function [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,out_kf] =...
     Tightly_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors,...
-    IMU_errors,GNSS_config,TC_KF_config,mode,imu,eph,WN,TOW)
+    IMU_errors,GNSS_config,TC_KF_config,mode,imu,eph,WN,TOW,settings)
 %Tightly_coupled_INS_GNSS - Simulates inertial navigation using ECEF
 % navigation equations and kinematic model, GNSS and tightly coupled
 % INS/GNSS integration. 
@@ -286,8 +286,6 @@ else
         if (dat.data(idx(ii),4) == 0) || (dat.data(idx(ii),8) == 0)
             continue
         else
-            settings.f1 = 1575.42e6;
-            settings.f2 = 1227.6e6;
             [PRIF,~,~] = ionocorr(dat.data(idx(ii),4),settings.f1,dat.data(idx(ii),8),settings.f2);
             GNSS_measurements(ii,1) = PRIF;
         end
@@ -295,10 +293,10 @@ else
 end
 
 
-
+GNSS_measurements(:,1) = GNSS_measurements(:,1) + bsvs + relsvs;
 % Determine Least-squares GNSS position solution
 [old_est_r_eb_e,old_est_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
-    GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs);
+    GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings);
 [old_est_L_b,old_est_lambda_b,old_est_h_b,old_est_v_eb_n] =...
     pv_ECEF_to_NED(old_est_r_eb_e,old_est_v_eb_e);
 est_L_b = old_est_L_b;
@@ -467,13 +465,15 @@ for epoch = 2:no_epochs
                 end
             end
             
+            GNSS_measurements(:,1) = GNSS_measuremets(:,1) + bsvs + relsvs;
+            
             if no_GNSS_meas > 3
                 % ///debug: do the corrections outside?
                 % ///debug: don't trust GNSS when less than 4 satellites
                 % calculate GNSS only
                 [gnss_r,~,~] = GNSS_LS_position_velocity(...
-                GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs);
-                    out_gnss(epoch,:) = gnss_r';
+                GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings);
+                out_gnss(epoch,:) = gnss_r';
             end
                 
         end
@@ -514,23 +514,23 @@ for epoch = 2:no_epochs
     
     % ///debug: need to fix
     if strcmp(mode,'sim')
-    % Determine errors and generate output record
-    [delta_r_eb_n,delta_v_eb_n,delta_eul_nb_n] = Calculate_errors_NED(...
-        est_L_b,est_lambda_b,est_h_b,est_v_eb_n,est_C_b_n,true_L_b,...
-        true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
-    out_errors(epoch,1) = time;
-    out_errors(epoch,2:4) = delta_r_eb_n';
-    out_errors(epoch,5:7) = delta_v_eb_n';
-    out_errors(epoch,8:10) = delta_eul_nb_n';
-        
-    % Reset old values
-    old_time = time;
-    old_true_r_eb_e = true_r_eb_e;
-    old_true_v_eb_e = true_v_eb_e;
-    old_true_C_b_e = true_C_b_e;
-    old_est_r_eb_e = est_r_eb_e;
-    old_est_v_eb_e = est_v_eb_e;
-    old_est_C_b_e = est_C_b_e;
+        % Determine errors and generate output record
+        [delta_r_eb_n,delta_v_eb_n,delta_eul_nb_n] = Calculate_errors_NED(...
+            est_L_b,est_lambda_b,est_h_b,est_v_eb_n,est_C_b_n,true_L_b,...
+            true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
+        out_errors(epoch,1) = time;
+        out_errors(epoch,2:4) = delta_r_eb_n';
+        out_errors(epoch,5:7) = delta_v_eb_n';
+        out_errors(epoch,8:10) = delta_eul_nb_n';
+
+        % Reset old values
+        old_time = time;
+        old_true_r_eb_e = true_r_eb_e;
+        old_true_v_eb_e = true_v_eb_e;
+        old_true_C_b_e = true_C_b_e;
+        old_est_r_eb_e = est_r_eb_e;
+        old_est_v_eb_e = est_v_eb_e;
+        old_est_C_b_e = est_C_b_e;
     end
     
 end %epoch
