@@ -38,12 +38,12 @@ eph = read_GPSbroadcast('brdc0460.20n');
 WN = 2092;
 TOW = 531813.2:0.2:534238.6;
 t_input = [WN TOW(1)];
-sim = 0;
+sim = 1;
 
 % Tightly coupled ECEF Inertial navigation and GNSS integrated navigation
 % simulation
 if sim == 1
-[out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD] =...
+[out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,out_kf] =...
     Tightly_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
     ,IMU_errors,GNSS_config,TC_KF_config,'sim');
 else
@@ -54,14 +54,15 @@ end
 
 % Plot the input motion profile and the errors (may not work in Octave).
 close all;
-% Plot_profile(in_profile);
+Plot_profile(in_profile);
 Plot_profile(out_profile);
-% Plot_errors(out_errors);
+Plot_errors(out_errors);
 
 % Write output profile and errors file
 Write_profile(output_profile_name,out_profile);
 Write_errors(output_errors_name,out_errors);
 
+%{
 figure()
 subplot(3,1,1);hold on
 plot(out_gnss(:,1),'r')
@@ -72,11 +73,12 @@ plot(out_kf(:,2),'b')
 subplot(3,1,3);hold on
 plot(out_gnss(:,3),'r')
 plot(out_kf(:,3),'b')
-
+%}
 figure();hold on
 plot(out_profile(:,3),out_profile(:,2),'.')
 gnss_lla = ecef2lla(out_gnss);
 plot(gnss_lla(:,2),gnss_lla(:,1),'.')
+
 % Ends
 end
 
@@ -216,13 +218,13 @@ out_gnss = [];
 out_kf = [];
 
 % Begins
-true_eul_nb = [0 0 0];
-true_C_b_n = Euler_to_CTM(true_eul_nb)';
+% true_eul_nb = [0 0 0];
+% true_C_b_n = Euler_to_CTM(true_eul_nb)';
 % [old_true_r_eb_e,old_true_v_eb_e,old_true_C_b_e] =...
 %         NED_to_ECEF(true_L_b,true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
-true_L_b = 0;
-true_lambda_b = 0;
-true_h_b = 0;
+% true_L_b = 0;
+% true_lambda_b = 0;
+% true_h_b = 0;
 if strcmp(mode,'sim')
     
     % Initialize true navigation solution
@@ -233,9 +235,9 @@ if strcmp(mode,'sim')
     true_v_eb_n = in_profile(1,5:7)';
     true_eul_nb = in_profile(1,8:10)';
     % ///debug: look into this
-%     true_C_b_n = Euler_to_CTM(true_eul_nb)';
-%     [old_true_r_eb_e,old_true_v_eb_e,old_true_C_b_e] =...
-%         NED_to_ECEF(true_L_b,true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
+    true_C_b_n = Euler_to_CTM(true_eul_nb)';
+    [old_true_r_eb_e,old_true_v_eb_e,old_true_C_b_e] =...
+        NED_to_ECEF(true_L_b,true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
     
     % Determine satellite positions and velocities
     [sat_r_es_e,sat_v_es_e] = Satellite_positions_and_velocities(old_time,...
@@ -256,12 +258,6 @@ if strcmp(mode,'sim')
     relsvs = zeros(no_GNSS_meas,1);
 else
     old_time = TOW(1);
-    
-%     sat_r = [];
-%     sat_v = [];
-%     for prn=1:32
-%         [health, sat_r{prn}, bsv, relsv, sat_v{prn}] = broadcast_eph2pos_etc(eph,[WN TOW(1)],prn);
-%     end
     
     if 0
         dat = read_rinex_obs7('drive6_RX2.20O');
@@ -330,7 +326,7 @@ out_profile(1,5:7) = old_est_v_eb_n';
 out_profile(1,8:10) = CTM_to_Euler(old_est_C_b_n')';
 
 % ///debug: need to fix
-%{
+if strcmp(mode,'sim')
 % Determine errors and generate output record
 [delta_r_eb_n,delta_v_eb_n,delta_eul_nb_n] = Calculate_errors_NED(...
     old_est_L_b,old_est_lambda_b,old_est_h_b,old_est_v_eb_n,old_est_C_b_n,...
@@ -339,7 +335,7 @@ out_errors(1,1) = old_time;
 out_errors(1,2:4) = delta_r_eb_n';
 out_errors(1,5:7) = delta_v_eb_n';
 out_errors(1,8:10) = delta_eul_nb_n';
-%}
+end
 
 % Initialize Kalman filter P matrix and IMU bias states
 P_matrix = Initialize_TC_P_matrix(TC_KF_config);
@@ -517,7 +513,7 @@ for epoch = 2:no_epochs
     out_profile(epoch,8:10) = CTM_to_Euler(est_C_b_n')';
     
     % ///debug: need to fix
-    %{
+    if strcmp(mode,'sim')
     % Determine errors and generate output record
     [delta_r_eb_n,delta_v_eb_n,delta_eul_nb_n] = Calculate_errors_NED(...
         est_L_b,est_lambda_b,est_h_b,est_v_eb_n,est_C_b_n,true_L_b,...
@@ -535,7 +531,7 @@ for epoch = 2:no_epochs
     old_est_r_eb_e = est_r_eb_e;
     old_est_v_eb_e = est_v_eb_e;
     old_est_C_b_e = est_C_b_e;
-    %}
+    end
     
 end %epoch
 
