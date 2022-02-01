@@ -96,8 +96,6 @@ for tt = 1:sz % loop through all input times
     % Pull out nearest ephemeris values
     [mn,jj] = min(abs( dt_input(tt) - dt_ephem ));
     
-    
-    
     if isempty(jj),continue,end  % no matching ephemeris time found. continue to next input time
     
     

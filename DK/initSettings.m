@@ -111,4 +111,5 @@ TC_KF_config.range_rate_SD = 0.1;
 settings.zd = 0;
 settings.f1 = 1575.42e6;
 settings.f2 = 1227.6e6;
+settings.PRIF = 0;
 end
