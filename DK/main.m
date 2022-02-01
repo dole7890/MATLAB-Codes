@@ -270,9 +270,9 @@ if strcmp(mode,'sim')
 else
     true_eul_nb = [0 0 0];
     true_C_b_n = Euler_to_CTM(true_eul_nb)';
-    true_L_b = 40;
-    true_lambda_b = -130;
-    true_h_b = 0;
+    true_L_b = deg2rad(40);
+    true_lambda_b = deg2rad(-105);
+    true_h_b = 1000;
     true_v_eb_n = [0 0 0]';%in_profile(1,5:7)';
     [old_true_r_eb_e,old_true_v_eb_e,old_true_C_b_e] =...
         NED_to_ECEF(true_L_b,true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
@@ -328,6 +328,9 @@ out_kf(1,:) = out_gnss;
 
 % Initialize estimated attitude solution
 % ///debug: may need to look into this
+if ~strcmp(mode,'sim')
+    initialization_errors.delta_eul_nb_n = [0;0;0];
+end
 old_est_C_b_n = Initialize_NED_attitude(true_C_b_n,initialization_errors);
 [temp1,temp2,old_est_C_b_e] = NED_to_ECEF(old_est_L_b,...
     old_est_lambda_b,old_est_h_b,old_est_v_eb_n,old_est_C_b_n);
@@ -431,7 +434,7 @@ for epoch = 2:no_epochs
         meas_omega_ib_b = meas_omega_ib_b - est_IMU_bias(4:6);
     else
         meas_f_ib_b = imu(epoch,5:7)';
-        meas_omega_ib_b = imu(epoch,2:4)';
+        meas_omega_ib_b = imu(epoch,2:4)'; % check if novatel uses radians or deg
         
         GNSS_config.epoch_interval = 0.2;
     end
@@ -442,7 +445,7 @@ for epoch = 2:no_epochs
         meas_omega_ib_b);
 
     % Determine whether to update GNSS simulation and run Kalman filter
-    if (time - time_last_GNSS) >= GNSS_config.epoch_interval
+    if (time - time_last_GNSS)+0.001 >= GNSS_config.epoch_interval
         GNSS_epoch = GNSS_epoch + 1;
         tor_s = time - time_last_GNSS;  % KF time interval
         time_last_GNSS = time;
@@ -466,7 +469,12 @@ for epoch = 2:no_epochs
             relsvs = zeros(no_GNSS_meas,1);
         else
             ts = unique(dat.data(:,2));
-            idx = find(dat.data(:,2)==ts(GNSS_epoch));
+            try 
+                idx = find(dat.data(:,2)==ts(GNSS_epoch));
+            catch
+                continue
+            end
+                
             xs = [];
             xdots = [];
             bsvs = [];
