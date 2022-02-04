@@ -221,16 +221,9 @@ for tt = 1:sz % loop through all input times
     odot = (sat_ephem(jj,9) - wE);
     
     % Satellite velocity in ECEF (m)
-%     xdot(tt,1) = xodot*coso - yodot*cosi*sino + yo*sini*sino*idot - x(tt,2)*odot;
-%     xdot(tt,2) = xodot*sino + yodot*cosi*coso - yo*sini*idot*coso + x(tt,1)*odot;
-%     xdot(tt,3) = yodot*sini+yo*cosi*idot;
-    
-    xdot(tt,1) = (xodot - yo*cosi*odot)*coso-...
-        (xo*odot+yodot*cosi-yo*sini*idot)*sino;
-    xdot(tt,2) = (xodot - yo*cosi*odot)*sino+...
-        (xo*odot+yodot*cosi-yo*sini*idot)*coso;
+    xdot(tt,1) = xodot*coso - yodot*cosi*sino + yo*sini*sino*idot - x(tt,2)*odot;
+    xdot(tt,2) = xodot*sino + yodot*cosi*coso - yo*sini*idot*coso + x(tt,1)*odot;
     xdot(tt,3) = yodot*sini+yo*cosi*idot;
-    
 end % END of t_input loop =================================================
 %==========================================================================
 

@@ -142,7 +142,7 @@ in_profile = [imu(:,2),deg2rad(imu(:,3:4)),imu(:,5),imu(:,19),imu(:,18),imu(:,20
 in_profile = in_profile(1:end-2,:);
 no_epochs = length(in_profile(:,1));
 
-sim = 1;
+sim = 0;
 imu = csvread('part6_ins_split.csv');
 imu = imu(1:20:end,:);
 settings = initSettings();
@@ -344,7 +344,7 @@ if strcmp(mode,'sim')
 
     bsvs = zeros(no_GNSS_meas,1);
     relsvs = zeros(no_GNSS_meas,1);
-    
+    S = ones(no_GNSS_meas,1);
 else
     true_eul_nb = [0 0 0];
     true_C_b_n = Euler_to_CTM(true_eul_nb)';
@@ -398,6 +398,7 @@ else
         GNSS_measurements(:,2) = GNSS_measurements(:,2)*settings.c/settings.f1;
     end
     no_GNSS_meas = length(GNSS_measurements(:,1));
+    S = dat.data(idx,7);
     
     for ii=1:length(no_GNSS_meas)
         if (dat.data(idx(ii),4) == 0) || (dat.data(idx(ii),8) == 0)
@@ -415,7 +416,7 @@ GNSS_measurements(:,1) = GNSS_measurements(:,1) + bsvs + relsvs;
 satPosLast = [];
 % Determine Least-squares GNSS position solution and use to initialize INS
 [GNSS_r_eb_e,GNSS_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
-    GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast);
+    GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast,S);
 old_est_r_eb_e = GNSS_r_eb_e;
 old_est_v_eb_e = GNSS_v_eb_e;
 [old_est_L_b,old_est_lambda_b,old_est_h_b,old_est_v_eb_n] =...
@@ -564,6 +565,7 @@ for epoch = 2:no_epochs
             
             bsvs = zeros(no_GNSS_meas,1);
             relsvs = zeros(no_GNSS_meas,1);
+            S = ones(no_GNSS_meas,1);
         else
             ts = unique(dat.data(:,2));
             try 
@@ -594,7 +596,7 @@ for epoch = 2:no_epochs
                 
             
             no_GNSS_meas = length(GNSS_measurements(:,1));
-            
+            S = dat.data(idx,7);
             
             for ii=1:length(no_GNSS_meas)
                 if (settings.PRIF~=1) || (dat.data(idx(ii),4) == 0) || (dat.data(idx(ii),8) == 0)
@@ -617,7 +619,7 @@ for epoch = 2:no_epochs
         if no_GNSS_meas > 3
             % Determine GNSS position solution
             [GNSS_r_eb_e,GNSS_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
-                GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast);
+                GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast,S);
 %             satPosLast = xs;
             satPosLast = [];
             out_gnss(epoch,:) = GNSS_r_eb_e';

@@ -145,11 +145,11 @@ no_epochs = length(in_profile(:,1));
 sim = 0;
 imu = csvread('part6_ins_split.csv');
 imu = imu(1:20:end,:);
-settings.velmode = 'carrier';
-% settings.velmode = 'doppler'; 
 settings = initSettings();
 settings.f1 = 1575.42e6;
 settings.c = 299792458;
+% settings.velmode = 'carrier';
+settings.velmode = 'doppler'; 
 
 % Loosely coupled ECEF Inertial navigation and GNSS integrated navigation
 % simulation
@@ -344,7 +344,7 @@ if strcmp(mode,'sim')
 
     bsvs = zeros(no_GNSS_meas,1);
     relsvs = zeros(no_GNSS_meas,1);
-    
+    S = eye(
 else
     true_eul_nb = [0 0 0];
     true_C_b_n = Euler_to_CTM(true_eul_nb)';
@@ -398,6 +398,7 @@ else
         GNSS_measurements(:,2) = GNSS_measurements(:,2)*settings.c/settings.f1;
     end
     no_GNSS_meas = length(GNSS_measurements(:,1));
+    S = diag(dat.data(idx,7));
     
     for ii=1:length(no_GNSS_meas)
         if (dat.data(idx(ii),4) == 0) || (dat.data(idx(ii),8) == 0)
@@ -411,10 +412,11 @@ end
 
 GNSS_measurements(:,1) = GNSS_measurements(:,1) + bsvs + relsvs;
 
-satPosLast = xs;
+% satPosLast = xs;
+satPosLast = [];
 % Determine Least-squares GNSS position solution and use to initialize INS
 [GNSS_r_eb_e,GNSS_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
-    GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast);
+    GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast,S);
 old_est_r_eb_e = GNSS_r_eb_e;
 old_est_v_eb_e = GNSS_v_eb_e;
 [old_est_L_b,old_est_lambda_b,old_est_h_b,old_est_v_eb_n] =...
@@ -543,8 +545,8 @@ for epoch = 2:no_epochs
     [est_r_eb_e,est_v_eb_e,est_C_b_e] = Nav_equations_ECEF(tor_i,...
         old_est_r_eb_e,old_est_v_eb_e,old_est_C_b_e,meas_f_ib_b,...
         meas_omega_ib_b);
-    [old_est_r_eb_e ecef2lla(old_est_r_eb_e')']
-    [est_r_eb_e ecef2lla(est_r_eb_e')']
+%     [old_est_r_eb_e ecef2lla(old_est_r_eb_e')']
+%     [est_r_eb_e ecef2lla(est_r_eb_e')']
     % Determine whether to update GNSS simulation and run Kalman filter
     if (time - time_last_GNSS)+0.001 >= GNSS_config.epoch_interval
         GNSS_epoch = GNSS_epoch + 1;
@@ -617,7 +619,8 @@ for epoch = 2:no_epochs
             % Determine GNSS position solution
             [GNSS_r_eb_e,GNSS_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
                 GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast);
-            satPosLast = xs;
+%             satPosLast = xs;
+            satPosLast = [];
             out_gnss(epoch,:) = GNSS_r_eb_e';
         else
             1;
