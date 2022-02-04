@@ -315,6 +315,7 @@ end
 
 
 GNSS_measurements(:,1) = GNSS_measurements(:,1) + bsvs + relsvs;
+
 % Determine Least-squares GNSS position solution
 [old_est_r_eb_e,old_est_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
     GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings);
@@ -434,7 +435,7 @@ for epoch = 2:no_epochs
         meas_omega_ib_b = meas_omega_ib_b - est_IMU_bias(4:6);
     else
         meas_f_ib_b = imu(epoch,5:7)';
-        meas_omega_ib_b = deg2rad(imu(epoch,2:4)'); % check if novatel uses radians or deg
+        meas_omega_ib_b = deg2rad(imu(epoch,2:4)'); % novatel uses deg
         
         GNSS_config.epoch_interval = 0.2;
     end

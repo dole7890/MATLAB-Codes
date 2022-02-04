@@ -1,5 +1,5 @@
 function [est_r_ea_e,est_v_ea_e,est_clock] = GNSS_LS_position_velocity(...
-    GNSS_measurements,no_GNSS_meas,predicted_r_ea_e,predicted_v_ea_e,bsvs,relsvs,settings)
+    GNSS_measurements,no_GNSS_meas,predicted_r_ea_e,predicted_v_ea_e,bsvs,relsvs,settings,satPosLast)
 %GNSS_LS_position_velocity - Calculates position, velocity, clock offset, 
 %and clock drift using unweighted iterated least squares. Separate
 %calculations are implemented for position and clock offset and for
@@ -89,7 +89,7 @@ while (test_convergence>0.0001 && iter < 100) || iter<5
     x_pred = x_est;
     
     if iter>50
-        1
+        'did not converge'
     end
 end % while
 
@@ -109,6 +109,43 @@ test_convergence = 1;
 
 iter = 1;
 % Repeat until convergence
+
+
+%{
+% Doppler algorithm
+for j = 1:no_GNSS_meas
+    losVector(j,:) = (GNSS_measurements(j,3:5)-x_est(1:3)' ) / norm((GNSS_measurements(j,3:5)-x_est(1:3) ));
+    y(j,:) = GNSS_measurements(j,2) + dot(GNSS_measurements(j,6:8),losVector(j,:))';
+    H(j,:) = [losVector(j,:),-(GNSS_measurements(j,2)/c*settings.f1+settings.f1)/(settings.f1)];
+end
+
+x_est = inv(H'*H)*H'*y;
+%}
+
+%{
+% Carrier phase using single user position
+userPosLast = x_est(1:3)';
+deltaTime = 0.2;
+for j=1:no_GNSS_meas
+    losVectorCurr(:,j)=(GNSS_measurements(j,3:5)-x_est(1:3)')/...
+        norm(GNSS_measurements(j,3:5)-x_est(1:3)');
+    losVectorLast(:,j)=(satPosLast(j,:)-userPosLast)/...
+        norm(satPosLast(j,:)-userPosLast);
+    
+    svDopp(j)=dot(losVectorCurr(:,j),GNSS_measurements(j,3:5))...
+                    -dot(losVectorLast(:,j),satPosLast(j,:));
+    svDopp(j)= svDopp(j)/deltaTime;
+    
+    deltaGeo(j)=dot(losVectorCurr(:,j),userPosLast)...
+                    -dot(losVectorLast(:,j),userPosLast);
+    deltaGeo(j)=deltaGeo(j)/deltaTime;
+end
+
+y=GNSS_measurements(:,2)-svDopp'+deltaGeo';
+H=[-losVectorCurr',ones(no_GNSS_meas,1)];
+vel = inv(H'*H)*H'*y;
+%}
+
 while test_convergence>0.0001 && iter<100
     iter = iter+1;
     
@@ -140,6 +177,7 @@ while test_convergence>0.0001 && iter<100
         % Predict line of sight and deploy in measurement matrix, (9.144)
         H_matrix (j,1:3) = - u_as_e';
         H_matrix (j,4) = 1;
+%         H_matrix (j,4) = -GNSS_measurements(j,2)/(c/settings.f1);
         
     end % for j
     
@@ -155,6 +193,7 @@ while test_convergence>0.0001 && iter<100
     x_pred = x_est;
     
 end % while
+
 
 % Set outputs to estimates
 est_v_ea_e(1:3,1) = x_est(1:3);

@@ -1,28 +1,127 @@
-function varargout = main(varargin)
+function varargout = main_LC(varargin)
 clc; clear all; close all;
-addpath('..\')
-addpath('subfunctions')
-%INS_GNSS_Demo_7
-%SCRIPT Tightly coupled INS/GNSS demo:
+%INS_GNSS_Demo_3
+%SCRIPT Loosely coupled INS/GNSS demo:
 %   Profile_1 (60s artificial car motion with two 90 deg turns)
-%   Consumer-grade IMU
+%   Tactical-grade IMU
+%
+% Software for use with "Principles of GNSS, Inertial, and Multisensor
+% Integrated Navigation Systems," Second Edition.
+%
+% Created 12/4/12 by Paul Groves
 
-[settings, IMU_errors, GNSS_config, TC_KF_config] = initSettings();
+% Copyright 2012, Paul Groves
+% License: BSD; see license.txt for details
+
+% Constants
+deg_to_rad = 0.01745329252;
+rad_to_deg = 1/deg_to_rad;
+micro_g_to_meters_per_second_squared = 9.80665E-6;
 
 % CONFIGURATION
 % Input truth motion profile filename
 input_profile_name = 'Profile_1.csv';
 % Output motion profile and error filenames
-output_profile_name = 'INS_GNSS_Demo_7_Profile.csv';
-output_errors_name = 'INS_GNSS_Demo_7_Errors.csv';
+output_profile_name = 'INS_GNSS_Demo_3_Profile.csv';
+output_errors_name = 'INS_GNSS_Demo_3_Errors.csv';
 
 % Attitude initialization error (deg, converted to rad; @N,E,D)
-initialization_errors.delta_eul_nb_n = [-0.5;0.4;2]*settings.deg_to_rad; % rad
+initialization_errors.delta_eul_nb_n = [-0.05;0.04;1]*deg_to_rad; % rad
+
+% Accelerometer biases (micro-g, converted to m/s^2; body axes)
+IMU_errors.b_a = [900;-1300;800] * micro_g_to_meters_per_second_squared;
+% Gyro biases (deg/hour, converted to rad/sec; body axes)
+IMU_errors.b_g = [-9;13;-8] * deg_to_rad / 3600;
+% Accelerometer scale factor and cross coupling errors (ppm, converted to
+% unitless; body axes)
+IMU_errors.M_a = [500, -300, 200;...
+                 -150, -600, 250;...
+                 -250,  100, 450] * 1E-6;
+% Gyro scale factor and cross coupling errors (ppm, converted to unitless;
+% body axes)
+IMU_errors.M_g = [400, -300,  250;...
+                    0, -300, -150;...
+                    0,    0, -350] * 1E-6;             
+% Gyro g-dependent biases (deg/hour/g, converted to rad-sec/m; body axes)
+IMU_errors.G_g = [0.9, -1.1, -0.6;...
+                 -0.5,  1.9, -1.6;...
+                  0.3,  1.1, -1.3] * deg_to_rad / (3600 * 9.80665);             
+% Accelerometer noise root PSD (micro-g per root Hz, converted to m s^-1.5)                
+IMU_errors.accel_noise_root_PSD = 100 *...
+    micro_g_to_meters_per_second_squared;
+% Gyro noise root PSD (deg per root hour, converted to rad s^-0.5)                
+IMU_errors.gyro_noise_root_PSD = 0.01 * deg_to_rad / 60;
+% Accelerometer quantization level (m/s^2)
+IMU_errors.accel_quant_level = 1E-2;
+% Gyro quantization level (rad/s)
+IMU_errors.gyro_quant_level = 2E-4;
+
+% Interval between GNSS epochs (s)
+GNSS_config.epoch_interval = 0.5;
+
+% Initial estimated position (m; ECEF)
+GNSS_config.init_est_r_ea_e = [0;0;0];
+
+% Number of satellites in constellation
+GNSS_config.no_sat = 30;
+% Orbital radius of satellites (m)
+GNSS_config.r_os = 2.656175E7;
+% Inclination angle of satellites (deg)
+GNSS_config.inclination = 55;
+% Longitude offset of constellation (deg)
+GNSS_config.const_delta_lambda = 0;
+% Timing offset of constellation (s)
+GNSS_config.const_delta_t = 0;
+
+% Mask angle (deg)
+GNSS_config.mask_angle = 10;
+% Signal in space error SD (m) *Give residual where corrections are applied
+GNSS_config.SIS_err_SD = 1;
+% Zenith ionosphere error SD (m) *Give residual where corrections are applied
+GNSS_config.zenith_iono_err_SD = 2;
+% Zenith troposphere error SD (m) *Give residual where corrections are applied
+GNSS_config.zenith_trop_err_SD = 0.2;
+% Code tracking error SD (m) *Can extend to account for multipath
+GNSS_config.code_track_err_SD = 1;
+% Range rate tracking error SD (m/s) *Can extend to account for multipath
+GNSS_config.rate_track_err_SD = 0.02;
+% Receiver clock offset at time=0 (m);
+GNSS_config.rx_clock_offset = 10000;
+% Receiver clock drift at time=0 (m/s);
+GNSS_config.rx_clock_drift = 100;
+
+% Initial attitude uncertainty per axis (deg, converted to rad)
+LC_KF_config.init_att_unc = degtorad(1);
+% Initial velocity uncertainty per axis (m/s)
+LC_KF_config.init_vel_unc = 0.1;
+% Initial position uncertainty per axis (m)
+LC_KF_config.init_pos_unc = 10;
+% Initial accelerometer bias uncertainty per instrument (micro-g, converted
+% to m/s^2)
+LC_KF_config.init_b_a_unc = 1000 * micro_g_to_meters_per_second_squared;
+% Initial gyro bias uncertainty per instrument (deg/hour, converted to rad/sec)
+LC_KF_config.init_b_g_unc = 10 * deg_to_rad / 3600;
+
+% Gyro noise PSD (deg^2 per hour, converted to rad^2/s)                
+LC_KF_config.gyro_noise_PSD = (0.02 * deg_to_rad / 60)^2;
+% Accelerometer noise PSD (micro-g^2 per Hz, converted to m^2 s^-3)                
+LC_KF_config.accel_noise_PSD = (200 *...
+    micro_g_to_meters_per_second_squared)^2;
+% Accelerometer bias random walk PSD (m^2 s^-5)
+LC_KF_config.accel_bias_PSD = 1.0E-7;
+% Gyro bias random walk PSD (rad^2 s^-3)
+LC_KF_config.gyro_bias_PSD = 2.0E-12;
+
+% Position measurement noise SD per axis (m)
+LC_KF_config.pos_meas_SD = 2.5;
+% Velocity measurement noise SD per axis (m/s)
+LC_KF_config.vel_meas_SD = 0.1;
 
 % Seeding of the random number generator for reproducability. Change 
 % this value for a different random number sequence (may not work in Octave).
-% RandStream.Type = (RandStream('mt19937ar','seed',1));
 RandStream('mt19937ar','seed',1);
+
+% Begins
 
 % Input truth motion profile from .csv format file
 [in_profile,no_epochs,ok] = Read_profile(input_profile_name);
@@ -33,82 +132,67 @@ if ~ok
 end %if
 
 imu = csvread('part6_edit.csv',2,0);
-imu(:,end-2:end) = deg2rad(imu(:,end-2:end));
+% imu(:,end-2:end) = deg2rad(imu(:,end-2:end));
 eph = read_GPSbroadcast('brdc0460.20n');
 WN = imu(1,1);
 TOW = imu(:,2);
-sim = 0;
+
+% in_profile = [imu(:,2),deg2rad(imu(:,3:4)),imu(:,5),imu(:,19),imu(:,18),-imu(:,20),imu(:,33),imu(:,32),imu(:,31)];
+in_profile = [imu(:,2),deg2rad(imu(:,3:4)),imu(:,5),imu(:,19),imu(:,18),imu(:,20),imu(:,33),imu(:,32),imu(:,31)];
+in_profile = in_profile(1:end-2,:);
+no_epochs = length(in_profile(:,1));
+
+sim = 1;
 imu = csvread('part6_ins_split.csv');
 imu = imu(1:20:end,:);
-% Tightly coupled ECEF Inertial navigation and GNSS integrated navigation
+settings = initSettings();
+settings.f1 = 1575.42e6;
+settings.c = 299792458;
+% settings.velmode = 'carrier';
+settings.velmode = 'doppler'; 
+
+% Loosely coupled ECEF Inertial navigation and GNSS integrated navigation
 % simulation
 if sim == 1
-[out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,out_kf] =...
-    Tightly_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
-    ,IMU_errors,GNSS_config,TC_KF_config,'sim',imu,eph,WN,TOW,settings);
+[out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss] =...
+    Loosely_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
+    ,IMU_errors,GNSS_config,LC_KF_config,'sim',imu,eph,WN,TOW,settings);
 else
-    no_epochs = length(imu(:,1));
-[out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,out_kf] =...
-    Tightly_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
-    ,IMU_errors,GNSS_config,TC_KF_config,'real',imu,eph,WN,TOW,settings);
+[out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss] =...
+    Loosely_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
+    ,IMU_errors,GNSS_config,LC_KF_config,'real',imu,eph,WN,TOW,settings);
 end
 
 % Plot the input motion profile and the errors (may not work in Octave).
 close all;
-%{
 Plot_profile(in_profile);
 Plot_profile(out_profile);
+
+figure();hold on
+plot(rad2deg(out_profile(:,3)),rad2deg(out_profile(:,2)),'b.')
+
+figure();hold on
+plot(rad2deg(in_profile(:,3)),rad2deg(in_profile(:,2)),'b.')
+
+gnss_lla = ecef2lla(out_gnss);
+figure()
+plot(gnss_lla(:,2),gnss_lla(:,1),'r.')
+return
 Plot_errors(out_errors);
 
 % Write output profile and errors file
 Write_profile(output_profile_name,out_profile);
 Write_errors(output_errors_name,out_errors);
 
-
-figure()
-subplot(3,1,1);hold on
-plot(out_gnss(:,1),'r')
-plot(out_kf(:,1),'b')
-subplot(3,1,2);hold on
-plot(out_gnss(:,2),'r')
-plot(out_kf(:,2),'b')
-subplot(3,1,3);hold on
-plot(out_gnss(:,3),'r')
-plot(out_kf(:,3),'b')
-%}
-figure();hold on
-plot(rad2deg(out_profile(:,3)),rad2deg(out_profile(:,2)),'b.')
-gnss_lla = ecef2lla(out_gnss);
-plot(gnss_lla(:,2),gnss_lla(:,1),'r.')
-% plot(rad2deg(in_profile(:,3)),rad2deg(in_profile(:,2)),'g.')
-legend('TC EKF','GNSS LS','Truth')
-
-return
-figure();
-truth = lla2ecef(rad2deg(in_profile(:,2:4)));
-idx = out_gnss(:,1)~=0;
-subplot(3,1,1);hold on
-plot(out_gnss(idx,1)-truth(idx,1),'.')
-plot(out_kf(idx,1)-truth(idx,1),'.')
-ylabel('X(m)')
-legend('GNSS Error','TC Error')
-subplot(3,1,2);hold on
-plot(out_gnss(idx,2)-truth(idx,2),'.')
-plot(out_kf(idx,2)-truth(idx,2),'.')
-ylabel('Y(m)')
-subplot(3,1,3);hold on
-plot(out_gnss(idx,3)-truth(idx,3),'.')
-plot(out_kf(idx,3)-truth(idx,3),'.')
-ylabel('Z(m)')
 % Ends
 end
 
-function [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,out_kf] =...
-    Tightly_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors,...
-    IMU_errors,GNSS_config,TC_KF_config,mode,imu,eph,WN,TOW,settings)
-%Tightly_coupled_INS_GNSS - Simulates inertial navigation using ECEF
-% navigation equations and kinematic model, GNSS and tightly coupled
-% INS/GNSS integration. 
+function [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss] =...
+    Loosely_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors,...
+    IMU_errors,GNSS_config,LC_KF_config,mode,imu,eph,WN,TOW,settings)
+%Loosely_coupled_INS_GNSS - Simulates inertial navigation using ECEF
+% navigation equations and kinematic model, GNSS using a least-squares
+% positioning algorithm, and loosely-coupled INS/GNSS integration. 
 %
 % Software for use with "Principles of GNSS, Inertial, and Multisensor
 % Integrated Navigation Systems," Second Edition.
@@ -149,22 +233,18 @@ function [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,o
 %     .rate_track_err_SD  Range rate tracking error SD (m/s)
 %     .rx_clock_offset    Receiver clock offset at time=0 (m)
 %     .rx_clock_drift     Receiver clock drift at time=0 (m/s)
-%   TC_KF_config
+%   LC_KF_config
 %     .init_att_unc           Initial attitude uncertainty per axis (rad)
 %     .init_vel_unc           Initial velocity uncertainty per axis (m/s)
 %     .init_pos_unc           Initial position uncertainty per axis (m)
 %     .init_b_a_unc           Initial accel. bias uncertainty (m/s^2)
 %     .init_b_g_unc           Initial gyro. bias uncertainty (rad/s)
-%     .init_clock_offset_unc  Initial clock offset uncertainty per axis (m)
-%     .init_clock_drift_unc   Initial clock drift uncertainty per axis (m/s)
 %     .gyro_noise_PSD         Gyro noise PSD (rad^2/s)
 %     .accel_noise_PSD        Accelerometer noise PSD (m^2 s^-3)
 %     .accel_bias_PSD         Accelerometer bias random walk PSD (m^2 s^-5)
 %     .gyro_bias_PSD          Gyro bias random walk PSD (rad^2 s^-3)
-%     .clock_freq_PSD         Receiver clock frequency-drift PSD (m^2/s^3)
-%     .clock_phase_PSD        Receiver clock phase-drift PSD (m^2/s)
-%     .pseudo_range_SD        Pseudo-range measurement noise SD (m)
-%     .range_rate_SD          Pseudo-range rate measurement noise SD (m/s)
+%     .pos_meas_SD            Position measurement noise SD per axis (m)
+%     .vel_meas_SD            Velocity measurement noise SD per axis (m/s)
 %
 % Outputs:
 %   out_profile        Navigation solution as a motion profile array
@@ -231,13 +311,11 @@ function [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,o
 %  Column 17: clock offset uncertainty (m)
 %  Column 18: clock drift uncertainty (m/s)
 
-% Initialize
-out_gnss = [];
-out_kf = [];
+% Copyright 2012, Paul Groves
+% License: BSD; see license.txt for details
 
 % Begins
 if strcmp(mode,'sim')
-    
     % Initialize true navigation solution
     old_time = in_profile(1,1);
     true_L_b = in_profile(1,2);
@@ -245,11 +323,10 @@ if strcmp(mode,'sim')
     true_h_b = in_profile(1,4);
     true_v_eb_n = in_profile(1,5:7)';
     true_eul_nb = in_profile(1,8:10)';
-    % ///debug: look into this
     true_C_b_n = Euler_to_CTM(true_eul_nb)';
     [old_true_r_eb_e,old_true_v_eb_e,old_true_C_b_e] =...
         NED_to_ECEF(true_L_b,true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
-    
+
     % Determine satellite positions and velocities
     [sat_r_es_e,sat_v_es_e] = Satellite_positions_and_velocities(old_time,...
         GNSS_config);
@@ -264,9 +341,10 @@ if strcmp(mode,'sim')
     [GNSS_measurements,no_GNSS_meas] = Generate_GNSS_measurements(old_time,...
         sat_r_es_e,sat_v_es_e,old_true_r_eb_e,true_L_b,true_lambda_b,...
         old_true_v_eb_e,GNSS_biases,GNSS_config);
-    
+
     bsvs = zeros(no_GNSS_meas,1);
     relsvs = zeros(no_GNSS_meas,1);
+    
 else
     true_eul_nb = [0 0 0];
     true_C_b_n = Euler_to_CTM(true_eul_nb)';
@@ -282,10 +360,22 @@ else
     
     if 0
         dat = read_rinex_obs7('drive6_RX2.20O');
+        for ii=1:length(dat.data(:,1))
+            idx = find(dat.data(:,3) == dat.data(ii,3));
+            if idx(1) == ii
+                dat.data(ii,12) =0;
+            else
+                jj = find(idx == ii);
+                dat.data(ii,12) = dat.data(idx(jj),5)-dat.data(idx(jj-1),5);
+            end
+        end
         save('temp.mat','dat')
     else
         load('temp.mat')
     end
+    
+
+    
     ts = unique(dat.data(:,2));
     idx = find(dat.data(:,2)==ts(1));
     xs = [];
@@ -300,7 +390,13 @@ else
         relsvs(ii,:) = relsv;
     end
     
-    GNSS_measurements = [dat.data(idx,[4,6]) xs xdots];
+    if strcmp(settings.velmode,'doppler')
+        GNSS_measurements = [dat.data(idx,[4,6]) xs xdots];
+        GNSS_measurements(:,2) = GNSS_measurements(:,2)*settings.c/settings.f1;
+    elseif strcmp(settings.velmode,'carrier')
+        GNSS_measurements = [dat.data(idx,[4,12]) xs xdots];
+        GNSS_measurements(:,2) = GNSS_measurements(:,2)*settings.c/settings.f1;
+    end
     no_GNSS_meas = length(GNSS_measurements(:,1));
     
     for ii=1:length(no_GNSS_meas)
@@ -313,21 +409,22 @@ else
     end
 end
 
-
 GNSS_measurements(:,1) = GNSS_measurements(:,1) + bsvs + relsvs;
-% Determine Least-squares GNSS position solution
-[old_est_r_eb_e,old_est_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
-    GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings);
+
+% satPosLast = xs;
+satPosLast = [];
+% Determine Least-squares GNSS position solution and use to initialize INS
+[GNSS_r_eb_e,GNSS_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
+    GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast);
+old_est_r_eb_e = GNSS_r_eb_e;
+old_est_v_eb_e = GNSS_v_eb_e;
 [old_est_L_b,old_est_lambda_b,old_est_h_b,old_est_v_eb_n] =...
     pv_ECEF_to_NED(old_est_r_eb_e,old_est_v_eb_e);
 est_L_b = old_est_L_b;
 
 out_gnss(1,:) = old_est_r_eb_e';
-out_kf(1,:) = out_gnss;
-
 
 % Initialize estimated attitude solution
-% ///debug: may need to look into this
 if ~strcmp(mode,'sim')
     initialization_errors.delta_eul_nb_n = [0;0;0];
 end
@@ -347,7 +444,6 @@ out_profile(1,4) = old_est_h_b;
 out_profile(1,5:7) = old_est_v_eb_n';
 out_profile(1,8:10) = CTM_to_Euler(old_est_C_b_n')';
 
-% ///debug: need to fix
 if strcmp(mode,'sim')
 % Determine errors and generate output record
 [delta_r_eb_n,delta_v_eb_n,delta_eul_nb_n] = Calculate_errors_NED(...
@@ -360,7 +456,7 @@ out_errors(1,8:10) = delta_eul_nb_n';
 end
 
 % Initialize Kalman filter P matrix and IMU bias states
-P_matrix = Initialize_TC_P_matrix(TC_KF_config);
+P_matrix = Initialize_LC_P_matrix(LC_KF_config);
 est_IMU_bias = zeros(6,1);
 
 % Initialize IMU quantization residuals
@@ -374,7 +470,7 @@ out_clock(1,2:3) = est_clock;
 
 % Generate KF uncertainty record
 out_KF_SD(1,1) = old_time;
-for i =1:17
+for i =1:15
     out_KF_SD(1,i+1) = sqrt(P_matrix(i,i));
 end % for i
 
@@ -413,10 +509,9 @@ for epoch = 2:no_epochs
         [true_r_eb_e,true_v_eb_e,true_C_b_e] =...
             NED_to_ECEF(true_L_b,true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
     else
-%         time = TOW(epoch);
         time = imu(epoch,1);
     end
-
+    
     % Time interval
     tor_i = time - old_time;
     
@@ -428,13 +523,19 @@ for epoch = 2:no_epochs
          % Simulate IMU errors
         [meas_f_ib_b,meas_omega_ib_b,quant_residuals] = IMU_model(tor_i,...
             true_f_ib_b,true_omega_ib_b,IMU_errors,quant_residuals);
-
+        
         % Correct IMU errors
         meas_f_ib_b = meas_f_ib_b - est_IMU_bias(1:3);
         meas_omega_ib_b = meas_omega_ib_b - est_IMU_bias(4:6);
     else
         meas_f_ib_b = imu(epoch,5:7)';
-        meas_omega_ib_b = deg2rad(imu(epoch,2:4)'); % check if novatel uses radians or deg
+%         meas_f_ib_b = [imu(epoch,6);imu(epoch,5);-imu(epoch,7)];
+%         meas_f_ib_b(3) = -meas_f_ib_b(3);
+        meas_omega_ib_b = deg2rad(imu(epoch,2:4)'); % novatel uses deg
+%         meas_f_ib_b = true_C_b_e*meas_f_ib_b;
+        
+        meas_f_ib_b = meas_f_ib_b - est_IMU_bias(1:3);
+        meas_omega_ib_b = meas_omega_ib_b - est_IMU_bias(4:6);
         
         GNSS_config.epoch_interval = 0.2;
     end
@@ -443,7 +544,8 @@ for epoch = 2:no_epochs
     [est_r_eb_e,est_v_eb_e,est_C_b_e] = Nav_equations_ECEF(tor_i,...
         old_est_r_eb_e,old_est_v_eb_e,old_est_C_b_e,meas_f_ib_b,...
         meas_omega_ib_b);
-
+%     [old_est_r_eb_e ecef2lla(old_est_r_eb_e')']
+%     [est_r_eb_e ecef2lla(est_r_eb_e')']
     % Determine whether to update GNSS simulation and run Kalman filter
     if (time - time_last_GNSS)+0.001 >= GNSS_config.epoch_interval
         GNSS_epoch = GNSS_epoch + 1;
@@ -459,11 +561,6 @@ for epoch = 2:no_epochs
             [GNSS_measurements,no_GNSS_meas] = Generate_GNSS_measurements(...
                 time,sat_r_es_e,sat_v_es_e,true_r_eb_e,true_L_b,true_lambda_b,...
                 true_v_eb_e,GNSS_biases,GNSS_config);
-            
-            % cycle slip injection
-            if epoch == 2001
-                GNSS_measurements(:,2) = GNSS_measurements(:,2) + 0.19*0*[1 0 0 0 0 0 0 0 0]';
-            end
             
             bsvs = zeros(no_GNSS_meas,1);
             relsvs = zeros(no_GNSS_meas,1);
@@ -486,8 +583,18 @@ for epoch = 2:no_epochs
                 bsvs(ii,:) = bsv;
                 relsvs(ii,:) = relsv;
             end
-            GNSS_measurements = [dat.data(idx,[4,6]) xs xdots];
+            
+            if strcmp(settings.velmode,'doppler')
+                GNSS_measurements = [dat.data(idx,[4,6]) xs xdots];
+                GNSS_measurements(:,2) = GNSS_measurements(:,2)*settings.c/settings.f1;
+            elseif strcmp(settings.velmode,'carrier')
+                GNSS_measurements = [dat.data(idx,[4,12]) xs xdots];
+                GNSS_measurements(:,2) = GNSS_measurements(:,2)*settings.c/settings.f1;
+            end
+                
+            
             no_GNSS_meas = length(GNSS_measurements(:,1));
+            
             
             for ii=1:length(no_GNSS_meas)
                 if (settings.PRIF~=1) || (dat.data(idx(ii),4) == 0) || (dat.data(idx(ii),8) == 0)
@@ -504,35 +611,26 @@ for epoch = 2:no_epochs
             bsv_dat(dat.data(idx,3),GNSS_epoch) = bsvs;
             relsv_dat(dat.data(idx,3),GNSS_epoch) = relsvs;
             GNSS_measurements(:,1) = GNSS_measurements(:,1) + bsvs + relsvs;
-            
-            
-            
-                
+               
         end
         
         if no_GNSS_meas > 3
-            % ///debug: do the corrections outside?
-            % ///debug: don't trust GNSS when less than 4 satellites
-            % calculate GNSS only
-            [gnss_r,~,~] = GNSS_LS_position_velocity(...
-            GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings);
-            out_gnss(epoch,:) = gnss_r';
-            
+            % Determine GNSS position solution
+            [GNSS_r_eb_e,GNSS_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
+                GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast);
+%             satPosLast = xs;
+            satPosLast = [];
+            out_gnss(epoch,:) = GNSS_r_eb_e';
+        else
+            1;
         end
-        
-        r_old = est_r_eb_e;
-        v_old = est_v_eb_e;
+
         % Run Integration Kalman filter
-        [est_C_b_e,est_v_eb_e,est_r_eb_e,est_IMU_bias,est_clock,P_matrix] =...
-            TC_KF_Epoch(GNSS_measurements,no_GNSS_meas,tor_s,est_C_b_e,...
-            est_v_eb_e,est_r_eb_e,est_IMU_bias,est_clock,P_matrix,...
-            meas_f_ib_b,est_L_b,TC_KF_config);
-        
-        out_kf(epoch,:) = est_r_eb_e';
-        
-        r_pred_err(epoch) = norm(est_r_eb_e - r_old);
-        v_pred_err(epoch) = norm(est_v_eb_e - v_old);
-        
+        [est_C_b_e,est_v_eb_e,est_r_eb_e,est_IMU_bias,P_matrix] =...
+            LC_KF_Epoch(GNSS_r_eb_e,GNSS_v_eb_e,tor_s,est_C_b_e,...
+            est_v_eb_e,est_r_eb_e,est_IMU_bias,P_matrix,meas_f_ib_b,...
+            est_L_b,LC_KF_config);
+
         % Generate IMU bias and clock output records
         out_IMU_bias_est(GNSS_epoch,1) = time;
         out_IMU_bias_est(GNSS_epoch,2:7) = est_IMU_bias';
@@ -541,10 +639,10 @@ for epoch = 2:no_epochs
 
         % Generate KF uncertainty output record
         out_KF_SD(GNSS_epoch,1) = time;
-        for i =1:17
+        for i =1:15
             out_KF_SD(GNSS_epoch,i+1) = sqrt(P_matrix(i,i));
         end % for i
-        
+
     end % if time    
     
     % Convert navigation solution to NED
@@ -559,27 +657,29 @@ for epoch = 2:no_epochs
     out_profile(epoch,5:7) = est_v_eb_n';
     out_profile(epoch,8:10) = CTM_to_Euler(est_C_b_n')';
     
-    % ///debug: need to fix
-    if strcmp(mode,'sim')
-        % Determine errors and generate output record
-        [delta_r_eb_n,delta_v_eb_n,delta_eul_nb_n] = Calculate_errors_NED(...
-            est_L_b,est_lambda_b,est_h_b,est_v_eb_n,est_C_b_n,true_L_b,...
-            true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
-        out_errors(epoch,1) = time;
-        out_errors(epoch,2:4) = delta_r_eb_n';
-        out_errors(epoch,5:7) = delta_v_eb_n';
-        out_errors(epoch,8:10) = delta_eul_nb_n';
+    
+    % Determine errors and generate output record
+    [delta_r_eb_n,delta_v_eb_n,delta_eul_nb_n] = Calculate_errors_NED(...
+        est_L_b,est_lambda_b,est_h_b,est_v_eb_n,est_C_b_n,true_L_b,...
+        true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
+    out_errors(epoch,1) = time;
+    out_errors(epoch,2:4) = delta_r_eb_n';
+    out_errors(epoch,5:7) = delta_v_eb_n';
+    out_errors(epoch,8:10) = delta_eul_nb_n';
+    
 
-        % Reset old values
-        old_time = time;
+    % Reset old values
+    old_time = time;
+    if strcmp(mode,'sim')
         old_true_r_eb_e = true_r_eb_e;
         old_true_v_eb_e = true_v_eb_e;
         old_true_C_b_e = true_C_b_e;
-        old_est_r_eb_e = est_r_eb_e;
-        old_est_v_eb_e = est_v_eb_e;
-        old_est_C_b_e = est_C_b_e;
     end
-    
+    old_est_r_eb_e = est_r_eb_e;
+    old_est_v_eb_e = est_v_eb_e;
+    old_est_C_b_e = est_C_b_e;
+
+
 end %epoch
 
 % Complete progress bar
