@@ -57,7 +57,7 @@ IMU_errors.accel_quant_level = 1E-2;
 IMU_errors.gyro_quant_level = 2E-4;
 
 % Interval between GNSS epochs (s)
-GNSS_config.epoch_interval = 0.5;
+GNSS_config.epoch_interval = 0.2;
 
 % Initial estimated position (m; ECEF)
 GNSS_config.init_est_r_ea_e = [0;0;0];
@@ -114,8 +114,11 @@ LC_KF_config.gyro_bias_PSD = 2.0E-12;
 
 % Position measurement noise SD per axis (m)
 LC_KF_config.pos_meas_SD = 2.5;
+% LC_KF_config.pos_meas_SD = 10;
+
 % Velocity measurement noise SD per axis (m/s)
-LC_KF_config.vel_meas_SD = 0.1;
+% LC_KF_config.vel_meas_SD = 0.1;
+LC_KF_config.vel_meas_SD = 0.2;
 
 % Seeding of the random number generator for reproducability. Change 
 % this value for a different random number sequence (may not work in Octave).
@@ -136,15 +139,54 @@ imu = csvread('part6_edit.csv',2,0);
 eph = read_GPSbroadcast('brdc0460.20n');
 WN = imu(1,1);
 TOW = imu(:,2);
-
+truth = imu(:,[3:8,21:23]);
 % in_profile = [imu(:,2),deg2rad(imu(:,3:4)),imu(:,5),imu(:,19),imu(:,18),-imu(:,20),imu(:,33),imu(:,32),imu(:,31)];
 in_profile = [imu(:,2),deg2rad(imu(:,3:4)),imu(:,5),imu(:,19),imu(:,18),imu(:,20),imu(:,33),imu(:,32),imu(:,31)];
 in_profile = in_profile(1:end-2,:);
 no_epochs = length(in_profile(:,1));
 
-sim = 0;
+rtk1 = csvread('dat/rtklib_pos.csv',2,2);
+rtk_p = rtk1(:,1:3);
+fid = fopen('drive6.pos.stat');
+tline = fgetl(fid);
+rtk_v = [];
+rtkts = [];
+while ischar(tline)
+    if contains(tline,'VELACC')
+        tmp = split(tline,',');
+        rtk_v = [rtk_v; str2double(tmp(5:7))'];
+        rtkts = [rtkts;str2double(tmp(3))];
+    end
+    tline = fgetl(fid);
+end
+fclose(fid);
+rtk_pv = [rtk_p rtk_v(1:end-1,:)];
+
+
+
+sim = 2;
+
+if sim==2
+    truth = [];
+    ts = rtkts(1):0.2:rtkts(end-1);
+    for ii=1:length(ts)
+        [~,idx] = min(abs(rtkts-ts(ii)));
+        try
+        truth(ii,:) = [rtk_pv(idx,1:3) lla2ecef(rtk_pv(idx,1:3)) rtk_pv(idx,4:6)];
+        catch
+            1
+        end
+    end
+    1;
+end
+
 imu = csvread('part6_ins_split.csv');
 imu = imu(1:20:end,:);
+% imu2 = imu;
+% imu2(:,3) = imu(:,2);
+% imu2(:,2) = imu(:,3);
+% imu = imu2;
+% imu = imu(:,:);
 settings = initSettings();
 settings.f1 = 1575.42e6;
 settings.c = 299792458;
@@ -156,15 +198,24 @@ settings.velmode = 'doppler';
 if sim == 1
 [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss] =...
     Loosely_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
-    ,IMU_errors,GNSS_config,LC_KF_config,'sim',imu,eph,WN,TOW,settings);
+    ,IMU_errors,GNSS_config,LC_KF_config,'sim',imu,eph,WN,TOW,truth,settings);
+elseif sim == 2
+[out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss] =...
+    Loosely_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
+    ,IMU_errors,GNSS_config,LC_KF_config,'sim2',imu,eph,WN,TOW,truth,settings);    
 else
 [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss] =...
     Loosely_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
-    ,IMU_errors,GNSS_config,LC_KF_config,'real',imu,eph,WN,TOW,settings);
+    ,IMU_errors,GNSS_config,LC_KF_config,'real',imu,eph,WN,TOW,truth,settings);
 end
 
 % Plot the input motion profile and the errors (may not work in Octave).
 close all;
+idx = find(out_gnss(:,1)==0);
+out_gnss(idx,:) = [];
+idx = find(out_profile(:,2)==0);
+out_profile(idx,:) = [];
+
 Plot_profile(in_profile);
 Plot_profile(out_profile);
 
@@ -177,6 +228,13 @@ plot(rad2deg(in_profile(:,3)),rad2deg(in_profile(:,2)),'b.')
 gnss_lla = ecef2lla(out_gnss);
 figure()
 plot(gnss_lla(:,2),gnss_lla(:,1),'r.')
+
+figure()
+hold on
+plot(rad2deg(in_profile(:,3)),rad2deg(in_profile(:,2)),'g.')
+plot(gnss_lla(:,2),gnss_lla(:,1),'r.')
+plot(rad2deg(out_profile(:,3)),rad2deg(out_profile(:,2)),'b.')
+legend('truth','rtklib gnss','LC gnss/ins')
 return
 Plot_errors(out_errors);
 
@@ -189,7 +247,7 @@ end
 
 function [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss] =...
     Loosely_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors,...
-    IMU_errors,GNSS_config,LC_KF_config,mode,imu,eph,WN,TOW,settings)
+    IMU_errors,GNSS_config,LC_KF_config,mode,imu,eph,WN,TOW,truth,settings)
 %Loosely_coupled_INS_GNSS - Simulates inertial navigation using ECEF
 % navigation equations and kinematic model, GNSS using a least-squares
 % positioning algorithm, and loosely-coupled INS/GNSS integration. 
@@ -415,8 +473,14 @@ GNSS_measurements(:,1) = GNSS_measurements(:,1) + bsvs + relsvs;
 % satPosLast = xs;
 satPosLast = [];
 % Determine Least-squares GNSS position solution and use to initialize INS
+if ~strcmp(mode,'sim2')
 [GNSS_r_eb_e,GNSS_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
     GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast,S);
+else
+    GNSS_r_eb_e = truth(1,4:6)';
+    GNSS_v_eb_e = truth(1,7:9)';
+    est_clock = [0 0];
+end
 old_est_r_eb_e = GNSS_r_eb_e;
 old_est_v_eb_e = GNSS_v_eb_e;
 [old_est_L_b,old_est_lambda_b,old_est_h_b,old_est_v_eb_n] =...
@@ -616,15 +680,22 @@ for epoch = 2:no_epochs
                
         end
         
-        if no_GNSS_meas > 3
-            % Determine GNSS position solution
-            [GNSS_r_eb_e,GNSS_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
-                GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast,S);
-%             satPosLast = xs;
-            satPosLast = [];
-            out_gnss(epoch,:) = GNSS_r_eb_e';
+        if ~strcmp(mode,'sim2')
+            if no_GNSS_meas > 3
+                % Determine GNSS position solution
+                [GNSS_r_eb_e,GNSS_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
+                    GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast,S);
+    %             satPosLast = xs;
+                satPosLast = [];
+                out_gnss(epoch,:) = GNSS_r_eb_e';
+            else
+                1;
+            end
         else
-            1;
+            GNSS_r_eb_e = truth(epoch,4:6)';
+            GNSS_v_eb_e = truth(epoch,7:9)';
+            est_clock = [0 0];
+            out_gnss(epoch,:) = GNSS_r_eb_e';
         end
 
         % Run Integration Kalman filter
