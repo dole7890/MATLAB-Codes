@@ -4,19 +4,8 @@ clc; clear all; close all;
 %SCRIPT Loosely coupled INS/GNSS demo:
 %   Profile_1 (60s artificial car motion with two 90 deg turns)
 %   Tactical-grade IMU
-%
-% Software for use with "Principles of GNSS, Inertial, and Multisensor
-% Integrated Navigation Systems," Second Edition.
-%
-% Created 12/4/12 by Paul Groves
 
-% Copyright 2012, Paul Groves
-% License: BSD; see license.txt for details
-
-% Constants
-deg_to_rad = 0.01745329252;
-rad_to_deg = 1/deg_to_rad;
-micro_g_to_meters_per_second_squared = 9.80665E-6;
+[settings, IMU_errors, GNSS_config, LC_KF_config] = initSettings_LC();
 
 % CONFIGURATION
 % Input truth motion profile filename
@@ -26,188 +15,62 @@ output_profile_name = 'INS_GNSS_Demo_3_Profile.csv';
 output_errors_name = 'INS_GNSS_Demo_3_Errors.csv';
 
 % Attitude initialization error (deg, converted to rad; @N,E,D)
-initialization_errors.delta_eul_nb_n = [-0.05;0.04;1]*deg_to_rad; % rad
-
-% Accelerometer biases (micro-g, converted to m/s^2; body axes)
-IMU_errors.b_a = [900;-1300;800] * micro_g_to_meters_per_second_squared;
-% Gyro biases (deg/hour, converted to rad/sec; body axes)
-IMU_errors.b_g = [-9;13;-8] * deg_to_rad / 3600;
-% Accelerometer scale factor and cross coupling errors (ppm, converted to
-% unitless; body axes)
-IMU_errors.M_a = [500, -300, 200;...
-                 -150, -600, 250;...
-                 -250,  100, 450] * 1E-6;
-% Gyro scale factor and cross coupling errors (ppm, converted to unitless;
-% body axes)
-IMU_errors.M_g = [400, -300,  250;...
-                    0, -300, -150;...
-                    0,    0, -350] * 1E-6;             
-% Gyro g-dependent biases (deg/hour/g, converted to rad-sec/m; body axes)
-IMU_errors.G_g = [0.9, -1.1, -0.6;...
-                 -0.5,  1.9, -1.6;...
-                  0.3,  1.1, -1.3] * deg_to_rad / (3600 * 9.80665);             
-% Accelerometer noise root PSD (micro-g per root Hz, converted to m s^-1.5)                
-IMU_errors.accel_noise_root_PSD = 100 *...
-    micro_g_to_meters_per_second_squared;
-% Gyro noise root PSD (deg per root hour, converted to rad s^-0.5)                
-IMU_errors.gyro_noise_root_PSD = 0.01 * deg_to_rad / 60;
-% Accelerometer quantization level (m/s^2)
-IMU_errors.accel_quant_level = 1E-2;
-% Gyro quantization level (rad/s)
-IMU_errors.gyro_quant_level = 2E-4;
-
-% Interval between GNSS epochs (s)
-GNSS_config.epoch_interval = 0.2;
-
-% Initial estimated position (m; ECEF)
-GNSS_config.init_est_r_ea_e = [0;0;0];
-
-% Number of satellites in constellation
-GNSS_config.no_sat = 30;
-% Orbital radius of satellites (m)
-GNSS_config.r_os = 2.656175E7;
-% Inclination angle of satellites (deg)
-GNSS_config.inclination = 55;
-% Longitude offset of constellation (deg)
-GNSS_config.const_delta_lambda = 0;
-% Timing offset of constellation (s)
-GNSS_config.const_delta_t = 0;
-
-% Mask angle (deg)
-GNSS_config.mask_angle = 10;
-% Signal in space error SD (m) *Give residual where corrections are applied
-GNSS_config.SIS_err_SD = 1;
-% Zenith ionosphere error SD (m) *Give residual where corrections are applied
-GNSS_config.zenith_iono_err_SD = 2;
-% Zenith troposphere error SD (m) *Give residual where corrections are applied
-GNSS_config.zenith_trop_err_SD = 0.2;
-% Code tracking error SD (m) *Can extend to account for multipath
-GNSS_config.code_track_err_SD = 1;
-% Range rate tracking error SD (m/s) *Can extend to account for multipath
-GNSS_config.rate_track_err_SD = 0.02;
-% Receiver clock offset at time=0 (m);
-GNSS_config.rx_clock_offset = 10000;
-% Receiver clock drift at time=0 (m/s);
-GNSS_config.rx_clock_drift = 100;
-
-% Initial attitude uncertainty per axis (deg, converted to rad)
-LC_KF_config.init_att_unc = degtorad(1);
-% Initial velocity uncertainty per axis (m/s)
-LC_KF_config.init_vel_unc = 0.1;
-% Initial position uncertainty per axis (m)
-LC_KF_config.init_pos_unc = 10;
-% Initial accelerometer bias uncertainty per instrument (micro-g, converted
-% to m/s^2)
-LC_KF_config.init_b_a_unc = 1000 * micro_g_to_meters_per_second_squared;
-% Initial gyro bias uncertainty per instrument (deg/hour, converted to rad/sec)
-LC_KF_config.init_b_g_unc = 10 * deg_to_rad / 3600;
-
-% Gyro noise PSD (deg^2 per hour, converted to rad^2/s)                
-LC_KF_config.gyro_noise_PSD = (0.02 * deg_to_rad / 60)^2;
-% Accelerometer noise PSD (micro-g^2 per Hz, converted to m^2 s^-3)                
-LC_KF_config.accel_noise_PSD = (200 *...
-    micro_g_to_meters_per_second_squared)^2;
-% Accelerometer bias random walk PSD (m^2 s^-5)
-LC_KF_config.accel_bias_PSD = 1.0E-7;
-% Gyro bias random walk PSD (rad^2 s^-3)
-LC_KF_config.gyro_bias_PSD = 2.0E-12;
-
-% Position measurement noise SD per axis (m)
-LC_KF_config.pos_meas_SD = 2.5;
-% LC_KF_config.pos_meas_SD = 10;
-
-% Velocity measurement noise SD per axis (m/s)
-% LC_KF_config.vel_meas_SD = 0.1;
-LC_KF_config.vel_meas_SD = 0.2;
-
-% Seeding of the random number generator for reproducability. Change 
-% this value for a different random number sequence (may not work in Octave).
-RandStream('mt19937ar','seed',1);
-
-% Begins
+initialization_errors.delta_eul_nb_n = [-0.05;0.04;1]*settings.deg_to_rad; % rad
 
 % Input truth motion profile from .csv format file
 [in_profile,no_epochs,ok] = Read_profile(input_profile_name);
-
-% End script if there is a problem with the file
 if ~ok
     return;
 end %if
 
-imu = csvread('part6_edit.csv',2,0);
-% imu(:,end-2:end) = deg2rad(imu(:,end-2:end));
-eph = read_GPSbroadcast('brdc0460.20n');
-WN = imu(1,1);
-TOW = imu(:,2);
-truth = imu(:,[3:8,21:23]);
-% in_profile = [imu(:,2),deg2rad(imu(:,3:4)),imu(:,5),imu(:,19),imu(:,18),-imu(:,20),imu(:,33),imu(:,32),imu(:,31)];
-in_profile = [imu(:,2),deg2rad(imu(:,3:4)),imu(:,5),imu(:,19),imu(:,18),imu(:,20),imu(:,33),imu(:,32),imu(:,31)];
-in_profile = in_profile(1:end-2,:);
+%% Read Data
+% Truth Data
+novatel = csvread('part6_edit.csv',2,0);
+
+WN = novatel(1,1);
+TOW = novatel(:,2);
+% imu_truth = truth(:,[3:8,21:23]);
+in_profile = [novatel(:,2),deg2rad(novatel(:,3:4)),novatel(:,5),novatel(:,19),novatel(:,18),novatel(:,20),novatel(:,33),novatel(:,32),novatel(:,31)];
 no_epochs = length(in_profile(:,1));
 
-rtk1 = csvread('dat/rtklib_pos.csv',2,2);
-rtk_p = rtk1(:,1:3);
+% EPH Data
+eph = read_GPSbroadcast('brdc0460.20n');
+
+% RTKLIB Processed Data
+rtk1 = csvread('dat/rtklib_pos.csv',1,1);
+rtk_tp = rtk1(:,1);
+rtk_p = rtk1(:,2:4);
 fid = fopen('drive6.pos.stat');
 tline = fgetl(fid);
-rtk_v = [];
-rtkts = [];
+rtk_v = []; rtk_tv = [];
 while ischar(tline)
     if contains(tline,'VELACC')
         tmp = split(tline,',');
+        rtk_tv = [rtk_tv;str2double(tmp(3))];
         rtk_v = [rtk_v; str2double(tmp(5:7))'];
-        rtkts = [rtkts;str2double(tmp(3))];
     end
     tline = fgetl(fid);
 end
 fclose(fid);
-rtk_pv = [rtk_p rtk_v(1:end-1,:)];
+[rtk_t,idx1,idx2] = intersect(rtk_tp,rtk_tv);
+rtk_pv = [rtk_t lla2ecef(rtk_p(idx1,:)) rtk_v(idx2,:)];
 
-
-
-sim = 2;
-
-if sim==2
-    truth = [];
-    ts = rtkts(1):0.2:rtkts(end-1);
-    for ii=1:length(ts)
-        [~,idx] = min(abs(rtkts-ts(ii)));
-        try
-        truth(ii,:) = [rtk_pv(idx,1:3) lla2ecef(rtk_pv(idx,1:3)) rtk_pv(idx,4:6)];
-        catch
-            1
-        end
-    end
-    1;
-end
-
+% IMU
 imu = csvread('part6_ins_split.csv');
-imu = imu(1:20:end,:);
-% imu2 = imu;
-% imu2(:,3) = imu(:,2);
-% imu2(:,2) = imu(:,3);
-% imu = imu2;
-% imu = imu(:,:);
-settings = initSettings();
-settings.f1 = 1575.42e6;
-settings.c = 299792458;
-% settings.velmode = 'carrier';
-settings.velmode = 'doppler'; 
+% novatel = novatel(1:20:end,:); % resample
+
+% mode
+% 1: Input: NovAtel Truth
+% 2: Input: NovAtel IMU & RTKLIB
+% 3: Input: NovAtel IMU & NovAtel Raw
+% 4: Demo Simulation
+mode = 2;
 
 % Loosely coupled ECEF Inertial navigation and GNSS integrated navigation
 % simulation
-if sim == 1
 [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss] =...
     Loosely_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
-    ,IMU_errors,GNSS_config,LC_KF_config,'sim',imu,eph,WN,TOW,truth,settings);
-elseif sim == 2
-[out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss] =...
-    Loosely_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
-    ,IMU_errors,GNSS_config,LC_KF_config,'sim2',imu,eph,WN,TOW,truth,settings);    
-else
-[out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss] =...
-    Loosely_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
-    ,IMU_errors,GNSS_config,LC_KF_config,'real',imu,eph,WN,TOW,truth,settings);
-end
+    ,IMU_errors,GNSS_config,LC_KF_config,mode,imu,eph,WN,TOW,rtk_pv,settings);
 
 % Plot the input motion profile and the errors (may not work in Octave).
 close all;
@@ -247,7 +110,7 @@ end
 
 function [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss] =...
     Loosely_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors,...
-    IMU_errors,GNSS_config,LC_KF_config,mode,imu,eph,WN,TOW,truth,settings)
+    IMU_errors,GNSS_config,LC_KF_config,mode,imu,eph,WN,TOW,rtk_pv,settings)
 %Loosely_coupled_INS_GNSS - Simulates inertial navigation using ECEF
 % navigation equations and kinematic model, GNSS using a least-squares
 % positioning algorithm, and loosely-coupled INS/GNSS integration. 
@@ -373,7 +236,7 @@ function [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss] 
 % License: BSD; see license.txt for details
 
 % Begins
-if strcmp(mode,'sim')
+if mode == 4
     % Initialize true navigation solution
     old_time = in_profile(1,1);
     true_L_b = in_profile(1,2);
@@ -473,12 +336,12 @@ GNSS_measurements(:,1) = GNSS_measurements(:,1) + bsvs + relsvs;
 % satPosLast = xs;
 satPosLast = [];
 % Determine Least-squares GNSS position solution and use to initialize INS
-if ~strcmp(mode,'sim2')
+if sum(mode == [1,3,4])
 [GNSS_r_eb_e,GNSS_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
     GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast,S);
 else
-    GNSS_r_eb_e = truth(1,4:6)';
-    GNSS_v_eb_e = truth(1,7:9)';
+    GNSS_r_eb_e = rtk_pv(1,2:4)';
+    GNSS_v_eb_e = rtk_pv(1,5:7)';
     est_clock = [0 0];
 end
 old_est_r_eb_e = GNSS_r_eb_e;
@@ -490,7 +353,7 @@ est_L_b = old_est_L_b;
 out_gnss(1,:) = old_est_r_eb_e';
 
 % Initialize estimated attitude solution
-if ~strcmp(mode,'sim')
+if sum(mode == [1,2,3])
     initialization_errors.delta_eul_nb_n = [0;0;0];
 end
 old_est_C_b_n = Initialize_NED_attitude(true_C_b_n,initialization_errors);
@@ -509,7 +372,6 @@ out_profile(1,4) = old_est_h_b;
 out_profile(1,5:7) = old_est_v_eb_n';
 out_profile(1,8:10) = CTM_to_Euler(old_est_C_b_n')';
 
-if strcmp(mode,'sim')
 % Determine errors and generate output record
 [delta_r_eb_n,delta_v_eb_n,delta_eul_nb_n] = Calculate_errors_NED(...
     old_est_L_b,old_est_lambda_b,old_est_h_b,old_est_v_eb_n,old_est_C_b_n,...
@@ -518,7 +380,6 @@ out_errors(1,1) = old_time;
 out_errors(1,2:4) = delta_r_eb_n';
 out_errors(1,5:7) = delta_v_eb_n';
 out_errors(1,8:10) = delta_eul_nb_n';
-end
 
 % Initialize Kalman filter P matrix and IMU bias states
 P_matrix = Initialize_LC_P_matrix(LC_KF_config);
@@ -562,25 +423,25 @@ for epoch = 2:no_epochs
             dots(1:(20 - progress_mark))));
     end % if epoch    
     
-    if strcmp(mode,'sim')
-        % Input data from motion profile
-        time = in_profile(epoch,1);
-        true_L_b = in_profile(epoch,2);
-        true_lambda_b = in_profile(epoch,3);
-        true_h_b = in_profile(epoch,4);
-        true_v_eb_n = in_profile(epoch,5:7)';
-        true_eul_nb = in_profile(epoch,8:10)';
-        true_C_b_n = Euler_to_CTM(true_eul_nb)';
-        [true_r_eb_e,true_v_eb_e,true_C_b_e] =...
-            NED_to_ECEF(true_L_b,true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
-    else
-        time = imu(epoch,1);
-    end
+    
+    % Input data from motion profile
+    time = in_profile(epoch,1);
+    true_L_b = in_profile(epoch,2);
+    true_lambda_b = in_profile(epoch,3);
+    true_h_b = in_profile(epoch,4);
+    true_v_eb_n = in_profile(epoch,5:7)';
+    true_eul_nb = in_profile(epoch,8:10)';
+    true_C_b_n = Euler_to_CTM(true_eul_nb)';
+    [true_r_eb_e,true_v_eb_e,true_C_b_e] =...
+        NED_to_ECEF(true_L_b,true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
+
+%         time = imu(epoch,1);
+    
     
     % Time interval
     tor_i = time - old_time;
     
-    if strcmp(mode,'sim')
+    if mode == 4
         % Calculate specific force and angular rate
         [true_f_ib_b,true_omega_ib_b] = Kinematics_ECEF(tor_i,true_C_b_e,...
             old_true_C_b_e,true_v_eb_e,old_true_v_eb_e,old_true_r_eb_e);
@@ -617,7 +478,7 @@ for epoch = 2:no_epochs
         tor_s = time - time_last_GNSS;  % KF time interval
         time_last_GNSS = time;
         
-        if strcmp(mode,'sim')
+        if mode == 4
             % Determine satellite positions and velocities
             [sat_r_es_e,sat_v_es_e] = Satellite_positions_and_velocities(time,...
                 GNSS_config);
@@ -680,7 +541,7 @@ for epoch = 2:no_epochs
                
         end
         
-        if ~strcmp(mode,'sim2')
+        if mode ~= 2
             if no_GNSS_meas > 3
                 % Determine GNSS position solution
                 [GNSS_r_eb_e,GNSS_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
@@ -692,10 +553,14 @@ for epoch = 2:no_epochs
                 1;
             end
         else
-            GNSS_r_eb_e = truth(epoch,4:6)';
-            GNSS_v_eb_e = truth(epoch,7:9)';
-            est_clock = [0 0];
-            out_gnss(epoch,:) = GNSS_r_eb_e';
+            try
+                GNSS_r_eb_e = rtk_pv(epoch,2:4)';
+                GNSS_v_eb_e = rtk_pv(epoch,5:7)';
+                est_clock = [0 0];
+                out_gnss(epoch,:) = GNSS_r_eb_e';
+            catch
+                return
+            end
         end
 
         % Run Integration Kalman filter
@@ -743,7 +608,7 @@ for epoch = 2:no_epochs
 
     % Reset old values
     old_time = time;
-    if strcmp(mode,'sim')
+    if mode == 4
         old_true_r_eb_e = true_r_eb_e;
         old_true_v_eb_e = true_v_eb_e;
         old_true_C_b_e = true_C_b_e;
