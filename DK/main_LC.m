@@ -1,5 +1,5 @@
 function varargout = main_LC(varargin)
-clc; clear all; close all;
+% clc; clear all; close all;
 %INS_GNSS_Demo_3
 %SCRIPT Loosely coupled INS/GNSS demo:
 %   Profile_1 (60s artificial car motion with two 90 deg turns)
@@ -64,7 +64,7 @@ imu = csvread('part6_ins_split.csv');
 % 2: Input: NovAtel IMU & RTKLIB
 % 3: Input: NovAtel IMU & NovAtel Raw
 % 4: Demo Simulation
-mode = 2;
+mode = 4;
 
 % Loosely coupled ECEF Inertial navigation and GNSS integrated navigation
 % simulation
@@ -450,14 +450,18 @@ for epoch = 2:no_epochs
         [meas_f_ib_b,meas_omega_ib_b,quant_residuals] = IMU_model(tor_i,...
             true_f_ib_b,true_omega_ib_b,IMU_errors,quant_residuals);
         
+        imu(epoch,5:7)  = meas_f_ib_b;
+        imu(epoch,2:4)  = meas_omega_ib_b;
+        
         % Correct IMU errors
         meas_f_ib_b = meas_f_ib_b - est_IMU_bias(1:3);
         meas_omega_ib_b = meas_omega_ib_b - est_IMU_bias(4:6);
+        
     else
-        meas_f_ib_b = imu(epoch,5:7)';
+        meas_f_ib_b = -imu(epoch,5:7)';
 %         meas_f_ib_b = [imu(epoch,6);imu(epoch,5);-imu(epoch,7)];
 %         meas_f_ib_b(3) = -meas_f_ib_b(3);
-        meas_omega_ib_b = deg2rad(imu(epoch,2:4)'); % novatel uses deg
+        meas_omega_ib_b = -deg2rad(imu(epoch,2:4)'); % novatel uses deg
 %         meas_f_ib_b = true_C_b_e*meas_f_ib_b;
         
         meas_f_ib_b = meas_f_ib_b - est_IMU_bias(1:3);
@@ -470,10 +474,11 @@ for epoch = 2:no_epochs
     [est_r_eb_e,est_v_eb_e,est_C_b_e] = Nav_equations_ECEF(tor_i,...
         old_est_r_eb_e,old_est_v_eb_e,old_est_C_b_e,meas_f_ib_b,...
         meas_omega_ib_b);
+    
 %     [old_est_r_eb_e ecef2lla(old_est_r_eb_e')']
 %     [est_r_eb_e ecef2lla(est_r_eb_e')']
     % Determine whether to update GNSS simulation and run Kalman filter
-    if (time - time_last_GNSS)+0.001 >= GNSS_config.epoch_interval
+    if epoch <700 && (time - time_last_GNSS)+0.001 >= GNSS_config.epoch_interval
         GNSS_epoch = GNSS_epoch + 1;
         tor_s = time - time_last_GNSS;  % KF time interval
         time_last_GNSS = time;
@@ -616,8 +621,15 @@ for epoch = 2:no_epochs
     old_est_r_eb_e = est_r_eb_e;
     old_est_v_eb_e = est_v_eb_e;
     old_est_C_b_e = est_C_b_e;
-
-
+    
+    if mod(epoch,10)==0
+    figure(101);hold on
+    plot(rad2deg(est_lambda_b),rad2deg(est_L_b),'.')
+    end
+if mod(epoch,900)==0
+    1
+end
+    
 end %epoch
 
 % Complete progress bar
