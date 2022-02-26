@@ -64,7 +64,8 @@ imu = csvread('part6_ins_split.csv');
 % 2: Input: NovAtel IMU & RTKLIB
 % 3: Input: NovAtel IMU & NovAtel Raw
 % 4: Demo Simulation
-mode = 4;
+% mode = 4;
+mode = 5;
 
 % Loosely coupled ECEF Inertial navigation and GNSS integrated navigation
 % simulation
@@ -272,7 +273,8 @@ else
     true_L_b = deg2rad(40);
     true_lambda_b = deg2rad(-105);
     true_h_b = 1000;
-    true_v_eb_n = [0 0 0]';%in_profile(1,5:7)';
+%     true_v_eb_n = [0 0 0]';%in_profile(1,5:7)';
+    true_v_eb_n = in_profile(1,5:7)';
     [old_true_r_eb_e,old_true_v_eb_e,old_true_C_b_e] =...
         NED_to_ECEF(true_L_b,true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
     
@@ -339,6 +341,10 @@ satPosLast = [];
 if sum(mode == [1,3,4])
 [GNSS_r_eb_e,GNSS_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
     GNSS_measurements,no_GNSS_meas,GNSS_config.init_est_r_ea_e,[0;0;0],bsvs,relsvs,settings,satPosLast,S);
+elseif mode == 5
+    GNSS_r_eb_e = lla2ecef([rad2deg(in_profile(1,2)),rad2deg(in_profile(1,3)),in_profile(1,4)])';
+    GNSS_v_eb_e = ([(in_profile(1,5)),(in_profile(1,6)),in_profile(1,7)])';
+    est_clock = [0 0];
 else
     GNSS_r_eb_e = rtk_pv(1,2:4)';
     GNSS_v_eb_e = rtk_pv(1,5:7)';
@@ -353,7 +359,7 @@ est_L_b = old_est_L_b;
 out_gnss(1,:) = old_est_r_eb_e';
 
 % Initialize estimated attitude solution
-if sum(mode == [1,2,3])
+if sum(mode == [1,2,3,5])
     initialization_errors.delta_eul_nb_n = [0;0;0];
 end
 old_est_C_b_n = Initialize_NED_attitude(true_C_b_n,initialization_errors);
@@ -478,7 +484,7 @@ for epoch = 2:no_epochs
 %     [old_est_r_eb_e ecef2lla(old_est_r_eb_e')']
 %     [est_r_eb_e ecef2lla(est_r_eb_e')']
     % Determine whether to update GNSS simulation and run Kalman filter
-    if epoch <700 && (time - time_last_GNSS)+0.001 >= GNSS_config.epoch_interval
+    if epoch >1 && (time - time_last_GNSS)+0.001 >= GNSS_config.epoch_interval
         GNSS_epoch = GNSS_epoch + 1;
         tor_s = time - time_last_GNSS;  % KF time interval
         time_last_GNSS = time;
@@ -496,6 +502,8 @@ for epoch = 2:no_epochs
             bsvs = zeros(no_GNSS_meas,1);
             relsvs = zeros(no_GNSS_meas,1);
             S = ones(no_GNSS_meas,1);
+        elseif mode == 5
+            1;
         else
             ts = unique(dat.data(:,2));
             try 
@@ -546,7 +554,12 @@ for epoch = 2:no_epochs
                
         end
         
-        if mode ~= 2
+        if mode == 5
+            GNSS_r_eb_e = lla2ecef([rad2deg(in_profile(epoch,2)),rad2deg(in_profile(epoch,3)),in_profile(epoch,4)])';
+            GNSS_v_eb_e = ([(in_profile(epoch,5)),(in_profile(epoch,6)),in_profile(epoch,7)])';
+            out_gnss(epoch,:) = GNSS_r_eb_e';
+            est_clock = [0 0];
+        elseif mode ~= 2
             if no_GNSS_meas > 3
                 % Determine GNSS position solution
                 [GNSS_r_eb_e,GNSS_v_eb_e,est_clock] = GNSS_LS_position_velocity(...
@@ -557,6 +570,7 @@ for epoch = 2:no_epochs
             else
                 1;
             end
+        
         else
             try
                 GNSS_r_eb_e = rtk_pv(epoch,2:4)';
@@ -623,11 +637,15 @@ for epoch = 2:no_epochs
     old_est_C_b_e = est_C_b_e;
     
     if mod(epoch,10)==0
-    figure(101);hold on
-    plot(rad2deg(est_lambda_b),rad2deg(est_L_b),'.')
+    figure(103);hold on
+    plot(rad2deg(out_profile(epoch,3)),rad2deg(out_profile(epoch,2)),'b.')
+    LLA = ecef2lla(out_gnss);
+    plot(LLA(end,2),LLA(end,1),'r.')
+%     tmp = ([rad2deg(in_profile(:,2)),rad2deg(in_profile(:,3)),in_profile(:,4)]);
+%     figure();plot(tmp(:,2),tmp(:,1))
     end
-if mod(epoch,900)==0
-    1
+if mod(epoch,800)==0
+    1;
 end
     
 end %epoch
