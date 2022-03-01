@@ -93,12 +93,12 @@ LC_KF_config.gyro_bias_PSD = 2.0E-12;
 % Position measurement noise SD per axis (m)
 LC_KF_config.pos_meas_SD = 2.5;
 % LC_KF_config.pos_meas_SD = 10;
-LC_KF_config.pos_meas_SD = 0.01;
+% LC_KF_config.pos_meas_SD = 0.01;
 
 % Velocity measurement noise SD per axis (m/s)
-% LC_KF_config.vel_meas_SD = 0.1;
-LC_KF_config.vel_meas_SD = 0.2;
-LC_KF_config.vel_meas_SD = 0.002;
+LC_KF_config.vel_meas_SD = 0.1;
+% LC_KF_config.vel_meas_SD = 0.2;
+% LC_KF_config.vel_meas_SD = 0.002;
 
 settings.zd = 0;
 settings.f1 = 1575.42e6;
