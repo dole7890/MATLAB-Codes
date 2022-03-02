@@ -1,6 +1,5 @@
 function varargout = main_LC(varargin)
-% clc; clear all; close all;
-%INS_GNSS_Demo_3
+clc; clear all; close all;
 %SCRIPT Loosely coupled INS/GNSS demo:
 %   Profile_1 (60s artificial car motion with two 90 deg turns)
 %   Tactical-grade IMU
@@ -30,7 +29,7 @@ novatel = csvread('part6_edit.csv',2,0);
 WN = novatel(1,1);
 TOW = novatel(:,2);
 % imu_truth = truth(:,[3:8,21:23]);
-in_profile = [novatel(:,2),deg2rad(novatel(:,3:4)),-novatel(:,5),novatel(:,19),novatel(:,18),novatel(:,20),novatel(:,33),novatel(:,32),novatel(:,31)];
+in_profile = [novatel(:,2),deg2rad(novatel(:,3:4)),novatel(:,5),novatel(:,19),novatel(:,18),novatel(:,20),novatel(:,33),novatel(:,32),novatel(:,31)];
 no_epochs = length(in_profile(:,1));
 
 % EPH Data
@@ -101,8 +100,9 @@ imu = csvread('part6_ins_split.csv');
 % 2: Input: NovAtel IMU & RTKLIB
 % 3: Input: NovAtel IMU & NovAtel Raw
 % 4: Demo Simulation
+% 5: Use NovAtel truth pos/vel and NovAtel INS
 mode = 4;
-mode = 5;
+% mode = 5;
 
 % Loosely coupled ECEF Inertial navigation and GNSS integrated navigation
 % simulation
@@ -451,7 +451,7 @@ rewind = '\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b';
 fprintf(strcat('Processing: ',dots));
 progress_mark = 0;
 progress_epoch = 0;
-
+load('testing.mat')
 % Main loop
 for epoch = 2:no_epochs
 
@@ -498,15 +498,16 @@ for epoch = 2:no_epochs
         meas_omega_ib_b = meas_omega_ib_b - est_IMU_bias(4:6);
         
     else
+        
         meas_f_ib_b = imu(epoch,5:7)';
 %         meas_f_ib_b = [imu(epoch,6);imu(epoch,5);-imu(epoch,7)];
         
-        meas_f_ib_b = [imu(epoch,7);imu(epoch,5);imu(epoch,6)];
+        meas_f_ib_b = [-imu(epoch,7);imu(epoch,5);imu(epoch,6)];
         
 %         meas_f_ib_b(3) = -meas_f_ib_b(3);
-        meas_omega_ib_b = deg2rad(imu(epoch,2:4)'); % novatel uses deg
-%         meas_omega_ib_b = (imu(epoch,2:4)'); % novatel uses deg
-        meas_omega_ib_b = [deg2rad(imu(epoch,4));deg2rad(imu(epoch,2));deg2rad(imu(epoch,3))];
+%         meas_omega_ib_b = deg2rad(imu(epoch,2:4)'); % novatel uses deg
+        meas_omega_ib_b = (imu(epoch,2:4)'); % novatel uses deg
+%         meas_omega_ib_b = [deg2rad(imu(epoch,4));deg2rad(imu(epoch,2));deg2rad(imu(epoch,3))];
         
         rotation = [1   0         0;
             0   cosd(180) -sind(180)
@@ -543,7 +544,7 @@ for epoch = 2:no_epochs
 %     [old_est_r_eb_e ecef2lla(old_est_r_eb_e')']
 %     [est_r_eb_e ecef2lla(est_r_eb_e')']
     % Determine whether to update GNSS simulation and run Kalman filter
-    if epoch > 1 && (time - time_last_GNSS)+0.001 >= GNSS_config.epoch_interval
+    if epoch < 800 && (time - time_last_GNSS)+0.001 >= GNSS_config.epoch_interval
         GNSS_epoch = GNSS_epoch + 1;
         tor_s = time - time_last_GNSS;  % KF time interval
         time_last_GNSS = time;
@@ -615,7 +616,7 @@ for epoch = 2:no_epochs
         
         if mode == 5
             GNSS_r_eb_e = lla2ecef([rad2deg(in_profile(epoch,2)),rad2deg(in_profile(epoch,3)),in_profile(epoch,4)])';
-            GNSS_v_eb_e = ([(in_profile(epoch,5)),(in_profile(epoch,6)),in_profile(epoch,7)])';
+            GNSS_v_eb_e = ([(in_profile(epoch,6)),(in_profile(epoch,5)),in_profile(epoch,7)])';
             out_gnss(epoch,:) = GNSS_r_eb_e';
             est_clock = [0 0];
         elseif mode ~= 2
@@ -697,9 +698,15 @@ for epoch = 2:no_epochs
     
     if mod(epoch,10)==0
     figure(103);hold on
-    plot(rad2deg(out_profile(epoch,3)),rad2deg(out_profile(epoch,2)),'m.')
-    LLA = ecef2lla(out_gnss);
-    plot(LLA(end,2),LLA(end,1),'r.')
+    if epoch<800
+        plot(rad2deg(out_profile(epoch,3)),rad2deg(out_profile(epoch,2)),'m.','markersize',12)
+    else
+        plot(rad2deg(out_profile(epoch,3)),rad2deg(out_profile(epoch,2)),'g.','markersize',12)
+    end
+%     LLA = ecef2lla(out_gnss);
+    LLA = ecef2lla(est_r_eb_e');
+    
+    plot(LLA(end,2),LLA(end,1),'bx')
 %     tmp = ([rad2deg(in_profile(:,2)),rad2deg(in_profile(:,3)),in_profile(:,4)]);
 %     figure();plot(tmp(:,2),tmp(:,1))
     end

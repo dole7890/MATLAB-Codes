@@ -29,7 +29,7 @@ novatel = csvread('part6_edit.csv',2,0);
 WN = novatel(1,1);
 TOW = novatel(:,2);
 % imu_truth = truth(:,[3:8,21:23]);
-in_profile = [novatel(:,2),deg2rad(novatel(:,3:4)),novatel(:,5),novatel(:,19),novatel(:,18),novatel(:,20),novatel(:,33),novatel(:,32),novatel(:,31)];
+in_profile = [novatel(:,2),deg2rad(novatel(:,3:4)),novatel(:,5),novatel(:,19),novatel(:,18),-novatel(:,20),deg2rad(novatel(:,33)),deg2rad(novatel(:,32)),deg2rad(novatel(:,31)), novatel(:,21:23)];
 %37: SD EAST 38: SD North 39: SD Height 40: SD Hor
 % 41: SD VE 42: SD VN 43: SD VH
 gnss_acc = novatel(:,37:43);
@@ -110,8 +110,8 @@ imu = csvread('part6_ins_split.csv');
 % 3: Input: NovAtel IMU & NovAtel Raw
 % 4: Demo Simulation
 % 5: Use NovAtel truth pos/vel and NovAtel INS
-% mode = 5;
-mode = 2;
+mode = 5;
+% mode = 2;
 
 % Loosely coupled ECEF Inertial navigation and GNSS integrated navigation
 % simulation
@@ -139,15 +139,16 @@ gnss_lla = ecef2lla(out_gnss);
 figure()
 plot(gnss_lla(:,2),gnss_lla(:,1),'r.')
 
-% imu_lla = ecef2lla(imu_profile(:,1:3));
-% figure()
-% plot(imu_lla(:,2),imu_lla(:,1),'k.')
+imu_lla = ecef2lla(imu_profile(:,1:3));
+figure()
+plot(imu_lla(:,2),imu_lla(:,1),'k.')
 
 figure()
 hold on
 plot(rad2deg(in_profile(:,3)),rad2deg(in_profile(:,2)),'g.')
 plot(gnss_lla(:,2),gnss_lla(:,1),'r.')
 plot(rad2deg(out_profile(:,3)),rad2deg(out_profile(:,2)),'b.')
+plot(imu_lla(:,2),imu_lla(:,1),'k.')
 legend('truth','rtklib gnss','LC gnss/ins')
 return
 Plot_errors(out_errors);
@@ -285,7 +286,7 @@ function [out_profile,kf_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,im
 
 % Initialize
 out_gnss = [];
-imu_profile = [];
+imu_profile = nan(length(imu(:,1)),6);
 % Begins
 
 
@@ -363,7 +364,8 @@ if sum(mode == [1,3,4])
 if mode == 5 % NovAtel Truth
     gnss_time = in_profile(:,1);
     GNSS_r_eb_e = lla2ecef([rad2deg(in_profile(1,2)),rad2deg(in_profile(1,3)),in_profile(1,4)])';
-    GNSS_v_eb_e = ([(in_profile(1,5)),(in_profile(1,6)),in_profile(1,7)])';
+%     GNSS_v_eb_e = ([(in_profile(1,5)),(in_profile(1,6)),in_profile(1,7)])';
+    GNSS_v_eb_e = ([(in_profile(1,11)),(in_profile(1,12)),in_profile(1,13)])';
     est_clock = [0 0];
 else % RTKLIB
     
@@ -392,6 +394,7 @@ out_gnss(1,:) = old_est_r_eb_e';
 
 % Initialize estimated attitude solution
 initialization_errors.delta_eul_nb_n = [0;0;0];
+% initialization_errors.delta_eul_nb_n = deg2rad([0.986546;	-1.151449; 261.68915]);
 
 % old_est_C_b_n = Initialize_NED_attitude(true_C_b_n,initialization_errors);
 old_est_C_b_n = Euler_to_CTM(initialization_errors.delta_eul_nb_n);
@@ -424,7 +427,8 @@ out_profile(1,8:10) = CTM_to_Euler(old_est_C_b_n')';
 % Initialize Kalman filter P matrix and IMU bias states
 P_matrix = Initialize_LC_P_matrix(LC_KF_config);
 est_IMU_bias = zeros(6,1);
-
+% est_IMU_bias = [imu(1,5:7)';deg2rad(imu(1,2:4)')]-[0 0 9.81 0 0 0]';
+        
 % Initialize IMU quantization residuals
 quant_residuals = [0;0;0;0;0;0];
 
@@ -441,7 +445,6 @@ for i =1:15
 end % for i
 
 % Initialize GNSS model timing
-gnss_epoch = 1;
 
 % Progress bar
 dots = '....................';
@@ -454,8 +457,11 @@ progress_epoch = 0;
 imu_epoch = 1;
 while imu(imu_epoch,1)< gnss_time(1)
     imu_epoch = imu_epoch+1;
+    imu_idx_start = imu_epoch;
 end
     
+% tmp=[];
+lastwarn('')
 % Main loop
 for gnss_epoch = 2:no_epochs
 
@@ -474,10 +480,20 @@ for gnss_epoch = 2:no_epochs
     % INS-only KF
     while imu(imu_epoch,1)<=gnss_time(gnss_epoch)
         meas_f_ib_b = imu(imu_epoch,5:7)';
-        meas_f_ib_b = [meas_f_ib_b(3);meas_f_ib_b(1);meas_f_ib_b(2)];
+%         meas_f_ib_b = [meas_f_ib_b(3);meas_f_ib_b(1);meas_f_ib_b(2)];
+
         meas_omega_ib_b = deg2rad(imu(imu_epoch,2:4)'); % novatel uses deg
-        meas_omega_ib_b = [meas_omega_ib_b(3);meas_omega_ib_b(1);meas_omega_ib_b(2)];
+%         meas_omega_ib_b = [meas_omega_ib_b(3);meas_omega_ib_b(1);meas_omega_ib_b(2)];
         
+%         rot = [-1 0 0;0 1 0;0 0 -1];
+%         rot = [1 0 0;0 -1 0;0 0 -1];
+%         rot = eye(3);
+        rot = [0 1 0;1 0 0;0 0 -1];
+        
+        meas_f_ib_b = rot*meas_f_ib_b;
+        meas_omega_ib_b = rot*meas_omega_ib_b;
+        
+%         tmp = [tmp;meas_f_ib_b' meas_omega_ib_b'];
         meas_f_ib_b = meas_f_ib_b - est_IMU_bias(1:3);
         meas_omega_ib_b = meas_omega_ib_b - est_IMU_bias(4:6);
         
@@ -488,13 +504,20 @@ for gnss_epoch = 2:no_epochs
             old_est_r_eb_e,old_est_v_eb_e,old_est_C_b_e,meas_f_ib_b,...
             meas_omega_ib_b);
         
-%         imu_profile(imu_epoch,:) = [est_r_eb_e',est_v_eb_e'];
+        imu_profile(imu_epoch-imu_idx_start+1,:) = [est_r_eb_e',est_v_eb_e'];
         
         imu_epoch = imu_epoch + 1;
         
+        % Reset old values
+        old_est_r_eb_e = est_r_eb_e;
+        old_est_v_eb_e = est_v_eb_e;
+        old_est_C_b_e = est_C_b_e;
+        
     end
     
-%     if gnss_epoch > 1000
+        
+    
+%     if gnss_epoch > 800
 %         gnss_epoch = gnss_epoch + 1;
 %         continue
 %     end
@@ -502,7 +525,8 @@ for gnss_epoch = 2:no_epochs
     % GNSS/INS
     if mode == 5
         GNSS_r_eb_e = lla2ecef([rad2deg(in_profile(gnss_epoch,2)),rad2deg(in_profile(gnss_epoch,3)),in_profile(gnss_epoch,4)])';
-        GNSS_v_eb_e = ([(in_profile(gnss_epoch,6)),(in_profile(gnss_epoch,5)),in_profile(gnss_epoch,7)])';
+%         GNSS_v_eb_e = ([(in_profile(gnss_epoch,6)),(in_profile(gnss_epoch,5)),in_profile(gnss_epoch,7)])';
+        GNSS_v_eb_e = ([(in_profile(gnss_epoch,11)),(in_profile(gnss_epoch,12)),in_profile(gnss_epoch,13)])';
         out_gnss(gnss_epoch,:) = GNSS_r_eb_e';
         est_clock = [0 0];
     else
@@ -518,15 +542,24 @@ for gnss_epoch = 2:no_epochs
     end
     
 %     acc = gnss_acc(gnss_epoch,:);
-    
-    tor_s = gnss_time(gnss_epoch) - gnss_time(gnss_epoch-1);
+
+    tor_s = time - old_time;
 
     % Run Integration Kalman filter
+    try
     [est_C_b_e,est_v_eb_e,est_r_eb_e,est_IMU_bias,P_matrix] =...
         LC_KF_Epoch(GNSS_r_eb_e,GNSS_v_eb_e,tor_s,est_C_b_e,...
         est_v_eb_e,est_r_eb_e,est_IMU_bias,P_matrix,meas_f_ib_b,...
         est_L_b,LC_KF_config);
-
+        old_time = time;
+    catch
+        1;
+    end
+    
+    if gnss_epoch == 8168
+        break
+    end
+    
     % Generate IMU bias and clock output records
     out_IMU_bias_est(gnss_epoch,1) = time;
     out_IMU_bias_est(gnss_epoch,2:7) = est_IMU_bias';
