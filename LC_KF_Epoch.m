@@ -96,6 +96,14 @@ H_matrix(4:6,4:6) = -eye(3);
 % 6. Set-up measurement noise covariance matrix assuming all components of
 % GNSS position and velocity are independent and have equal variance.
 R_matrix(1:3,1:3) = eye(3) * LC_KF_config.pos_meas_SD^2;
+%{
+R_matrix(1:3,1:3) = eye(3);
+R_matrix(1,1) = acc(1)^2;
+R_matrix(2,2) = acc(2)^2;
+R_matrix(3,3) = acc(3)^2;
+%}
+
+
 R_matrix(1:3,4:6) = zeros(3);
 R_matrix(4:6,1:3) = zeros(3);
 R_matrix(4:6,4:6) = eye(3) * LC_KF_config.vel_meas_SD^2;
