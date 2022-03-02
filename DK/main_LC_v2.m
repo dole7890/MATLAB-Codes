@@ -1,5 +1,5 @@
 function varargout = main_LC(varargin)
-clc; clear all; close all;
+% clc; clear all; close all;
 %SCRIPT Loosely coupled INS/GNSS demo:
 %   Profile_1 (60s artificial car motion with two 90 deg turns)
 %   Tactical-grade IMU
@@ -61,7 +61,6 @@ fclose(fid);
 [rtk_t,idx1,idx2] = intersect(rtk_tp,rtk_tv);
 rtk_pv = [rtk_t lla2ecef(rtk_p(idx1,:)) rtk_v(idx2,:)];
 
-%{
 if 0
 fid = fopen('gnss_log_2020_02_14_20_43_20.txt');
 tline = fgetl(fid);
@@ -93,15 +92,15 @@ while ischar(tline)
     tline =fgetl(fid);
         
 end
+save('android_ins.mat','android_ins')
 else
     load('android_ins.mat')
 end
-%}
 
-% imu = [android_ins(:,1),android_ins(:,5:7),android_ins(:,2:4)];
+imu = [android_ins(:,1),rad2deg(android_ins(:,5:7)),android_ins(:,2:4)];
 
 % IMU
-imu = csvread('part6_ins_split.csv');
+% imu2 = csvread('part6_ins_split.csv');
 % novatel = novatel(1:20:end,:); % resample
 
 % mode
@@ -488,7 +487,8 @@ for gnss_epoch = 2:no_epochs
 %         rot = [-1 0 0;0 1 0;0 0 -1];
 %         rot = [1 0 0;0 -1 0;0 0 -1];
 %         rot = eye(3);
-        rot = [0 1 0;1 0 0;0 0 -1];
+        rot = [0 1 0;1 0 0;0 0 -1]; % novatel
+        rot = [0 1 0;1 0 0;0 0 -1]; % android
         
         meas_f_ib_b = rot*meas_f_ib_b;
         meas_omega_ib_b = rot*meas_omega_ib_b;
@@ -506,6 +506,12 @@ for gnss_epoch = 2:no_epochs
         
         imu_profile(imu_epoch-imu_idx_start+1,:) = [est_r_eb_e',est_v_eb_e'];
         
+        if mod(imu_epoch,100)==0
+            figure(103);hold on
+            LLA = ecef2lla(est_r_eb_e');
+            plot(LLA(end,2),LLA(end,1),'m.','markersize',15)
+        end
+        
         imu_epoch = imu_epoch + 1;
         
         % Reset old values
@@ -516,11 +522,15 @@ for gnss_epoch = 2:no_epochs
     end
     
         
-    
-%     if gnss_epoch > 800
-%         gnss_epoch = gnss_epoch + 1;
-%         continue
-%     end
+%     700: 30sec
+    %800: 10sec
+    if gnss_epoch > 800
+        gnss_epoch = gnss_epoch + 1;
+        if gnss_epoch == 1000
+            break
+        end
+        continue
+    end
 %     
     % GNSS/INS
     if mode == 5
@@ -621,10 +631,17 @@ for gnss_epoch = 2:no_epochs
     gnss_errors(gnss_epoch,5:7) = delta_v_eb_n_G';
     gnss_errors(gnss_epoch,8:10) = delta_eul_nb_n_G';
     
+    if mod(gnss_epoch,5)==0
+    figure(103);hold on
+    plot(rad2deg(in_profile(gnss_epoch,3)),rad2deg(in_profile(gnss_epoch,2)),'bx','markersize',15)
+    end
+    
     if 0
     figure(103);hold on
+    
     plot(rad2deg(out_profile(gnss_epoch,3)),rad2deg(out_profile(gnss_epoch,2)),'m.')
     LLA = ecef2lla(out_gnss);
+    
     plot(LLA(end,2),LLA(end,1),'r.')
     plot(rad2deg(in_profile(gnss_epoch,3)),rad2deg(in_profile(gnss_epoch,2)),'g.')
 %     tmp = ([rad2deg(in_profile(:,2)),rad2deg(in_profile(:,3)),in_profile(:,4)]);
