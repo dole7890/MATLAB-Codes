@@ -549,7 +549,8 @@ for epoch = 2:no_epochs
 %     [old_est_r_eb_e ecef2lla(old_est_r_eb_e')']
 %     [est_r_eb_e ecef2lla(est_r_eb_e')']
     % Determine whether to update GNSS simulation and run Kalman filter
-    if epoch < 800 && (time - time_last_GNSS)+0.001 >= GNSS_config.epoch_interval
+    %800
+    if epoch >1 && (time - time_last_GNSS)+0.001 >= GNSS_config.epoch_interval
         GNSS_epoch = GNSS_epoch + 1;
         tor_s = time - time_last_GNSS;  % KF time interval
         time_last_GNSS = time;
@@ -713,8 +714,6 @@ for epoch = 2:no_epochs
     LLA = ecef2lla(est_r_eb_e');
     
     plot(LLA(end,2),LLA(end,1),'bx')
-%     tmp = ([rad2deg(in_profile(:,2)),rad2deg(in_profile(:,3)),in_profile(:,4)]);
-%     figure();plot(tmp(:,2),tmp(:,1))
     end
 if mod(epoch,800)==0
     1;

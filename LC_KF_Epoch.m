@@ -123,6 +123,10 @@ x_est_new = x_est_propagated + K_matrix * delta_z;
 % 10. Update state estimation error covariance matrix using (3.25)
 P_matrix_new = (eye(15) - K_matrix * H_matrix) * P_matrix_propagated;
 
+if isnan(P_matrix_new)
+    1;
+end
+
 % CLOSED-LOOP CORRECTION
 
 % Correct attitude, velocity, and position using (14.7-9)

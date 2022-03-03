@@ -97,10 +97,10 @@ else
     load('android_ins.mat')
 end
 
-imu = [android_ins(:,1),rad2deg(android_ins(:,5:7)),android_ins(:,2:4)];
+% imu = [android_ins(:,1),rad2deg(android_ins(:,5:7)),android_ins(:,2:4)];
 
 % IMU
-% imu2 = csvread('part6_ins_split.csv');
+imu = csvread('part6_ins_split.csv');
 % novatel = novatel(1:20:end,:); % resample
 
 % mode
@@ -110,11 +110,11 @@ imu = [android_ins(:,1),rad2deg(android_ins(:,5:7)),android_ins(:,2:4)];
 % 4: Demo Simulation
 % 5: Use NovAtel truth pos/vel and NovAtel INS
 mode = 5;
-% mode = 2;
+mode = 2;
 
 % Loosely coupled ECEF Inertial navigation and GNSS integrated navigation
 % simulation
-[out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,imu_profile] =...
+[out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,imu_profile,gnss_errors] =...
     Loosely_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
     ,IMU_errors,GNSS_config,LC_KF_config,mode,imu,eph,WN,TOW,rtk_pv,gnss_acc,settings);
 
@@ -159,7 +159,7 @@ Write_errors(output_errors_name,out_errors);
 % Ends
 end
 
-function [out_profile,kf_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,imu_profile] =...
+function [out_profile,kf_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,imu_profile,gnss_errors] =...
     Loosely_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors,...
     IMU_errors,GNSS_config,LC_KF_config,mode,imu,eph,WN,TOW,rtk_pv,gnss_acc,settings)
 %Loosely_coupled_INS_GNSS - Simulates inertial navigation using ECEF
@@ -506,13 +506,16 @@ for gnss_epoch = 2:no_epochs
         
         imu_profile(imu_epoch-imu_idx_start+1,:) = [est_r_eb_e',est_v_eb_e'];
         
-        if mod(imu_epoch,100)==0
-            figure(103);hold on
-            LLA = ecef2lla(est_r_eb_e');
-            plot(LLA(end,2),LLA(end,1),'m.','markersize',15)
-        end
+%         if mod(imu_epoch,100)==0
+%             figure(103);hold on
+%             LLA = ecef2lla(est_r_eb_e');
+%             plot(LLA(end,2),LLA(end,1),'m.','markersize',15)
+%         end
         
         imu_epoch = imu_epoch + 1;
+        if imu_epoch > length(imu(:,1))
+            return
+        end
         
         % Reset old values
         old_est_r_eb_e = est_r_eb_e;
@@ -524,13 +527,13 @@ for gnss_epoch = 2:no_epochs
         
 %     700: 30sec
     %800: 10sec
-    if gnss_epoch > 800
-        gnss_epoch = gnss_epoch + 1;
-        if gnss_epoch == 1000
-            break
-        end
-        continue
-    end
+%     if gnss_epoch > 800
+%         gnss_epoch = gnss_epoch + 1;
+%         if gnss_epoch == 1000
+%             break
+%         end
+%         continue
+%     end
 %     
     % GNSS/INS
     if mode == 5
@@ -554,7 +557,9 @@ for gnss_epoch = 2:no_epochs
 %     acc = gnss_acc(gnss_epoch,:);
 
     tor_s = time - old_time;
-
+    
+%     if gnss_epoch < 800
+    if gnss_epoch >1
     % Run Integration Kalman filter
     try
     [est_C_b_e,est_v_eb_e,est_r_eb_e,est_IMU_bias,P_matrix] =...
@@ -565,10 +570,15 @@ for gnss_epoch = 2:no_epochs
     catch
         1;
     end
-    
-    if gnss_epoch == 8168
-        break
     end
+    
+    
+%     if gnss_epoch == 1000
+%         kf_errors(1,:) = [];
+% kf_errors(998:end,:) = [];
+% Plot_errors(kf_errors);
+%         break
+%     end
     
     % Generate IMU bias and clock output records
     out_IMU_bias_est(gnss_epoch,1) = time;
@@ -613,7 +623,7 @@ for gnss_epoch = 2:no_epochs
         est_L_b,est_lambda_b,est_h_b,est_v_eb_n,est_C_b_n,true_L_b,...
         true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
     
-    kf_errors(gnss_epoch,1) = time;
+    kf_errors(gnss_epoch,1) = time-kf_errors(2,1);
     kf_errors(gnss_epoch,2:4) = delta_r_eb_n';
     kf_errors(gnss_epoch,5:7) = delta_v_eb_n';
     kf_errors(gnss_epoch,8:10) = delta_eul_nb_n';    
@@ -626,15 +636,15 @@ for gnss_epoch = 2:no_epochs
         gnss_L_b,gnss_lambda_b,gnss_h_b,gnss_v_eb_n,gnss_C_b_n,true_L_b,...
         true_lambda_b,true_h_b,true_v_eb_n,true_C_b_n);
     
-    gnss_errors(gnss_epoch,1) = time;
+    gnss_errors(gnss_epoch,1) = time-gnss_errors(2,1);
     gnss_errors(gnss_epoch,2:4) = delta_r_eb_n_G';
     gnss_errors(gnss_epoch,5:7) = delta_v_eb_n_G';
     gnss_errors(gnss_epoch,8:10) = delta_eul_nb_n_G';
     
-    if mod(gnss_epoch,5)==0
-    figure(103);hold on
-    plot(rad2deg(in_profile(gnss_epoch,3)),rad2deg(in_profile(gnss_epoch,2)),'bx','markersize',15)
-    end
+%     if mod(gnss_epoch,5)==0
+%     figure(103);hold on
+%     plot(rad2deg(in_profile(gnss_epoch,3)),rad2deg(in_profile(gnss_epoch,2)),'bx','markersize',15)
+%     end
     
     if 0
     figure(103);hold on
