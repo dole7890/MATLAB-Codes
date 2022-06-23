@@ -1,0 +1,104 @@
+PROGRAM = datasheet95, VERSION = 8.12.5.12
+Starting Datasheet Retrieval...
+1        National Geodetic Survey,   Retrieval Date = MARCH 11, 2021
+ DN7479 ***********************************************************************
+ DN7479  CORS        -  This is a GPS Continuously Operating Reference Station.
+ DN7479  DESIGNATION -  SLAC_BARD_CN2002 CORS ARP
+ DN7479  CORS_ID     -  SLAC
+ DN7479  PID         -  DN7479
+ DN7479  STATE/COUNTY-  CA/SAN MATEO
+ DN7479  COUNTRY     -  US
+ DN7479  USGS QUAD   -  PALO ALTO (2018)
+ DN7479
+ DN7479                         *CURRENT SURVEY CONTROL
+ DN7479  ______________________________________________________________________
+ DN7479* NAD 83(2011) POSITION- 37 24 59.45038(N) 122 12 15.29605(W)   ADJUSTED  
+ DN7479* NAD 83(2011) ELLIP HT-    64.212 (meters)        (06/??/19)   ADJUSTED
+ DN7479* NAD 83(2011) EPOCH   -  2010.00
+ DN7479  ______________________________________________________________________
+ DN7479  GEOID HEIGHT    -        -32.583 (meters)                     GEOID18
+ DN7479  NAD 83(2011) X  - -2,703,115.266 (meters)                     COMP
+ DN7479  NAD 83(2011) Y  - -4,291,768.344 (meters)                     COMP
+ DN7479  NAD 83(2011) Z  -  3,854,247.955 (meters)                     COMP
+ DN7479
+ DN7479  Network accuracy estimates per FGDC Geospatial Positioning Accuracy
+ DN7479  Standards:                                                         
+ DN7479         FGDC (95% conf, cm)     Standard deviation (cm)     CorrNE 
+ DN7479            Horiz  Ellip           SD_N   SD_E   SD_h      (unitless)
+ DN7479  -------------------------------------------------------------------
+ DN7479  NETWORK    0.18   0.56           0.08   0.06   0.28      0.07008500
+ DN7479  -------------------------------------------------------------------
+ DN7479
+ DN7479
+ DN7479.The coordinates were established by GPS observations
+ DN7479.and adjusted by the National Geodetic Survey in June 2019.
+ DN7479
+ DN7479.NAD 83(2011) refers to NAD 83 coordinates where the reference frame has 
+ DN7479.been affixed to the stable North American Tectonic Plate. 
+ DN7479
+ DN7479.The coordinates are valid at the epoch date displayed above
+ DN7479.which is a decimal equivalence of Year/Month/Day.
+ DN7479
+ DN7479.Due to the release of the International GNSS Service (IGS) 2014
+ DN7479.realization of the International Terrestrial Reference Frame of 2014
+ DN7479.(ITRF2014), NGS reprocessed all NOAA CORS Network and some IGS stations
+ DN7479.using data collected between 1/1/1996 and 1/30/2017. The resulting ITRF2014
+ DN7479.epoch 2010.00 coordinates, referred to as Multi-Year CORS Solution 2
+ DN7479.(MYCS2), were transformed to NAD 83 (2011/PA11/MA11) maintaining the
+ DN7479.currently published epoch of 2010.00.
+ DN7479
+ DN7479.Additional information on MYCS2 is available at
+ DN7479.https://geodesy.noaa.gov/CORS/coords.shtml
+ DN7479
+ DN7479.Significant digits in the geoid height do not necessarily reflect accuracy.
+ DN7479.GEOID18 height accuracy estimate available here.
+ DN7479
+ DN7479.The PID for the CORS L1 Phase Center is DN7480.
+ DN7479
+ DN7479.Click photographs - Photos may exist for this station.
+ DN7479
+ DN7479.The XYZ, and position/ellipsoidal ht. are equivalent.
+ DN7479
+ DN7479.The ellipsoidal height was determined by GPS observations
+ DN7479.and is referenced to NAD 83.
+ DN7479
+ DN7479. The following values were computed from the NAD 83(2011) position.
+ DN7479
+ DN7479;                    North         East     Units Scale Factor Converg.
+ DN7479;SPC CA 3     -   603,088.959 1,849,149.879   MT  0.99994613   -1 02 36.2
+ DN7479;SPC CA 3     - 1,978,634.36  6,066,752.56   sFT  0.99994613   -1 02 36.2
+ DN7479;UTM  10      - 4,141,376.367   570,415.331   MT  0.99966107   +0 29 00.7
+ DN7479
+ DN7479!             -  Elev Factor  x  Scale Factor =   Combined Factor
+ DN7479!SPC CA 3     -   0.99998992  x   0.99994613  =   0.99993605
+ DN7479!UTM  10      -   0.99998992  x   0.99966107  =   0.99965100
+ DN7479
+ DN7479_U.S. NATIONAL GRID SPATIAL ADDRESS: 10SEG7041541376(NAD 83)
+ DN7479
+ DN7479                          SUPERSEDED SURVEY CONTROL
+ DN7479
+ DN7479  NAD 83(2011)-  37 24 59.45039(N)    122 12 15.29592(W) AD(2010.00) c
+ DN7479  ELLIP H (04/??/12)   64.218  (m)                       GP(2010.00) c c
+ DN7479  NAD 83(CORS)-  37 24 59.44257(N)    122 12 15.28892(W) AD(2002.00) c
+ DN7479  ELLIP H (04/??/12)   64.215  (m)                       GP(2002.00) c c
+ DN7479
+ DN7479.Superseded values are not recommended for survey control.
+ DN7479
+ DN7479.NGS no longer adjusts projects to the NAD 27 or NGVD 29 datums.
+ DN7479.See file dsdata.pdf to determine how the superseded data were derived.
+ DN7479
+ DN7479_MARKER: STATION IS THE ANTENNA REFERENCE POINT OF THE GPS ANTENNA
+ DN7479
+ DN7479                          STATION DESCRIPTION
+ DN7479
+ DN7479'DESCRIBED BY NATIONAL GEODETIC SURVEY 2019
+ DN7479'STATION IS A GPS CORS.  LATEST INFORMATION INCLUDING POSITIONS AND
+ DN7479'VELOCITIES ARE AVAILABLE IN THE COORDINATE AND LOG FILES ACCESSIBLE
+ DN7479'BY ANONYMOUS FTP OR THE WORLDWIDE WEB.
+ DN7479'   ftp://cors.ngs.noaa.gov/cors/README.txt
+ DN7479'   ftp://cors.ngs.noaa.gov/cors/coord/coord_14 
+ DN7479'   ftp://cors.ngs.noaa.gov/cors/station_log 
+ DN7479'   https://geodesy.noaa.gov/CORS
+
+ *** retrieval complete.
+ Elapsed Time = 00:00:02

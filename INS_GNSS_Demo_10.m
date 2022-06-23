@@ -125,7 +125,7 @@ TC_KF_config.range_rate_SD = 0.1;
 
 % Seeding of the random number generator for reproducability. Change 
 % this value for a different random number sequence (may not work in Octave).
-RandStream.setDefaultStream(RandStream('mt19937ar','seed',1));
+% RandStream.setDefaultStream(RandStream('mt19937ar','seed',1));
 
 % Begins
 
@@ -146,6 +146,7 @@ end %if
 % Plot the input motion profile and the errors (may not work in Octave).
 close all;
 Plot_profile(in_profile);
+Plot_profile(out_profile);
 Plot_errors(out_errors);
 
 % Write output profile and errors file

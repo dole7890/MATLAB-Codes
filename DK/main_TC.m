@@ -10,7 +10,7 @@ addpath('subfunctions')
 [settings, IMU_errors, GNSS_config, TC_KF_config] = initSettings_TC();
 
 % 1: simulation, 2: novatel, 3: android
-mode = 2;
+mode = 3;
 
 if mode == 1
 % CONFIGURATION
@@ -38,12 +38,13 @@ end %if
 
 elseif mode == 2
     novatel = csvread('part6_edit.csv',2,0);
-    novatel(:,end-2:end) = deg2rad(novatel(:,end-2:end));
+%     novatel(:,end-2:end) = deg2rad(novatel(:,end-2:end));
     
     in_profile = [novatel(:,2),deg2rad(novatel(:,3:4)),novatel(:,5),novatel(:,19),novatel(:,18),-novatel(:,20),deg2rad(novatel(:,33)),deg2rad(novatel(:,32)),deg2rad(novatel(:,31)), novatel(:,21:23)];
-    gnss_acc = novatel(:,37:43);
-    gnss_acc = novatel(:,37:39);
-
+%     gnss_acc = novatel(:,37:43);
+%     gnss_acc = novatel(:,37:39);
+    imu = csvread('part6_ins_split.csv');
+    
     % Attitude initialization error (deg, converted to rad; @N,E,D)
     initialization_errors.delta_eul_nb_n = [-0.5;0.4;2]*settings.deg_to_rad; % rad
 
@@ -53,6 +54,41 @@ elseif mode == 2
     
     eph = read_GPSbroadcast('brdc0460.20n');
 elseif mode == 3
+    if 0
+        fid_imu = fopen('C:\Users\Dong Kyeong Lee\Documents\GitHub\dole7890\MATLAB-Codes\DK\dat\2021-07-19-US-MTV-1\XiaomiMi8\device_imu.csv');
+        msg = fgetl(fid_imu);
+        acc = []; gyr = [];
+        msg = fgetl(fid_imu);
+        while ischar(msg)
+            if contains(msg,'Acc')
+                tmp = split(msg,',');
+                acc = [acc;str2double(tmp(2:end))'];
+            end
+            if contains(msg,'Gyr')
+                tmp = split(msg,',');
+                gyr = [gyr;str2double(tmp(2:end))'];
+            end
+            msg = fgetl(fid_imu);
+        end
+    
+    truth = csvread('C:\Users\Dong Kyeong Lee\Documents\GitHub\dole7890\MATLAB-Codes\DK\dat\2021-07-19-US-MTV-1\XiaomiMi8\ground_truth.csv',1,2);
+    in_profile = [truth(:,7)/1000,truth(:,1:3)];
+    
+    dat_rinex = read_rinex_obs8('C:\Users\Dong Kyeong Lee\Documents\GitHub\dole7890\MATLAB-Codes\DK\dat\2021-07-19-US-MTV-1\XiaomiMi8\supplemental\gnss_rinex.21o');
+    WN = dat_rinex.data(1,1);
+    TOW = unique(dat_rinex.data(:,2));
+    
+    eph = read_GPSbroadcast('C:\Users\Dong Kyeong Lee\Documents\GitHub\dole7890\MATLAB-Codes\DK\dat\2021-07-19-US-MTV-1\slac200\slac2000.21n');
+    eph = read_GPSbroadcast('C:\Users\Dong Kyeong Lee\Documents\GitHub\dole7890\MATLAB-Codes\DK\dat\2021-07-19-US-MTV-1\slac200\brdc2000.21n');
+    
+        save('mode3.mat')
+    else
+        load('mode3.mat')
+    end
+    initialization_errors.delta_eul_nb_n = [-0.5;0.4;2]*settings.deg_to_rad; % rad
+    
+elseif mode == 4
+    if 0
     fid = fopen('gnss_log_2020_02_14_20_43_20.txt');
     tline = fgetl(fid);
     % idx = 1; LLA=[];
@@ -83,20 +119,26 @@ elseif mode == 3
         tline =fgetl(fid);
 
     end
-    save('android_ins.mat','android_ins')
-%     load('android_ins.mat')
+        save('android_ins.mat','android_ins')
+    else
+        load('android_ins.mat')
+    end
 end
 
 % Tightly coupled ECEF Inertial navigation and GNSS integrated navigation
 % simulation
 if mode == 1
 [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,out_kf] =...
-    Tightly_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
-    ,IMU_errors,GNSS_config,TC_KF_config,'sim',novatel,eph,WN,TOW,settings);
+    Tightly_coupled_INS_GNSS_ION(in_profile,no_epochs,initialization_errors...
+    ,IMU_errors,GNSS_config,TC_KF_config,'sim',imu,eph,WN,TOW,settings);
 elseif mode == 2
 [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,out_kf] =...
-    Tightly_coupled_INS_GNSS(in_profile,no_epochs,initialization_errors...
-    ,IMU_errors,GNSS_config,TC_KF_config,'real',novatel,eph,WN,TOW,settings);
+    Tightly_coupled_INS_GNSS_ION_v2(in_profile,no_epochs,initialization_errors...
+    ,IMU_errors,GNSS_config,TC_KF_config,'sim',imu,eph,WN,TOW,settings);
+elseif mode == 3
+    [out_profile,out_errors,out_IMU_bias_est,out_clock,out_KF_SD,out_gnss,out_kf] =...
+    Tightly_coupled_INS_GNSS_ION_v3(in_profile,initialization_errors...
+    ,IMU_errors,GNSS_config,TC_KF_config,'real',acc,gyr,truth,dat_rinex,eph,settings);
 end
 
 % Plot the input motion profile and the errors (may not work in Octave).

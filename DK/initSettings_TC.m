@@ -36,7 +36,7 @@ IMU_errors.gyro_quant_level = 2E-3;
 
 %% GNSS
 % Interval between GNSS epochs (s)
-GNSS_config.epoch_interval = 0.5;
+GNSS_config.epoch_interval = 0.2;
 
 % Initial estimated position (m; ECEF)
 GNSS_config.init_est_r_ea_e = [0;0;0];
@@ -72,7 +72,7 @@ GNSS_config.rx_clock_drift = 100;
 
 %% TC
 % Initial attitude uncertainty per axis (deg, converted to rad)
-TC_KF_config.init_att_unc = degtorad(2);
+TC_KF_config.init_att_unc = deg2rad(2);
 % Initial velocity uncertainty per axis (m/s)
 TC_KF_config.init_vel_unc = 0.1;
 % Initial position uncertainty per axis (m)
@@ -96,20 +96,28 @@ TC_KF_config.accel_noise_PSD = 0.2^2;
 % model
 % Accelerometer bias random walk PSD (m^2 s^-5)
 TC_KF_config.accel_bias_PSD = 1.0E-5;
+% TC_KF_config.accel_bias_PSD = 1;
 % Gyro bias random walk PSD (rad^2 s^-3)
 TC_KF_config.gyro_bias_PSD = 4.0E-11;
+% TC_KF_config.gyro_bias_PSD = 4;
 % Receiver clock frequency-drift PSD (m^2/s^3)
 TC_KF_config.clock_freq_PSD = 1;
+% TC_KF_config.clock_freq_PSD = 10;
 % Receiver clock phase-drift PSD (m^2/s)
 TC_KF_config.clock_phase_PSD = 1;
+% TC_KF_config.clock_phase_PSD = 10;
 
 % Pseudo-range measurement noise SD (m)
 TC_KF_config.pseudo_range_SD = 2.5;
+TC_KF_config.pseudo_range_SD = 0.5;
 % Pseudo-range rate measurement noise SD (m/s)
 TC_KF_config.range_rate_SD = 0.1;
+% TC_KF_config.range_rate_SD = 0.05;
 
-settings.zd = 0;
+settings.zd = 2.5;
 settings.f1 = 1575.42e6;
 settings.f2 = 1227.6e6;
 settings.PRIF = 0;
+settings.dualfreq = 0;
+settings.c = 299792458;
 end

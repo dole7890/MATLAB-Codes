@@ -155,8 +155,10 @@ R_matrix((no_meas + 1):(2 * no_meas),(no_meas + 1):(2 * no_meas)) =...
     eye(no_meas) * TC_KF_config.range_rate_SD^2;
 
 % 7. Calculate Kalman gain using (3.21)
+
 K_matrix = P_matrix_propagated * H_matrix' * inv(H_matrix *...
     P_matrix_propagated * H_matrix' + R_matrix);
+% K=eye(length(K_matrix));
 
 % 8. Formulate measurement innovations using (14.119)
 delta_z(1:no_meas,1) = GNSS_measurements(1:no_meas,1) -...
